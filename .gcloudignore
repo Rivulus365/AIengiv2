@@ -1,0 +1,25 @@
+# This file specifies files that are *not* uploaded to Google Cloud
+# using gcloud. It follows the same syntax as .gitignore
+
+.git
+.gitignore
+node_modules/
+npm-debug.log
+.env
+.env.local
+.env.*.local
+
+# Build output (will be built in Cloud Build)
+dist/
+
+# Development files
+*.md
+.vscode/
+.idea/
+
+# Docker files (not needed for Cloud Build)
+.dockerignore
+docker-compose.yml
+
+# Scripts
+scripts/

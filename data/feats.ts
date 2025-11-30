@@ -1,0 +1,61 @@
+
+import { Feat } from '../types';
+
+export const FEAT_LIBRARY: Record<string, Feat> = {
+    // PHB Feats
+    "Actor": { name: "Actor", description: "+1 Cha, advantage on Deception/Performance to mimic.", type: "passive", effect: "+1 Cha, Mimicry" },
+    "Alert": { name: "Alert", description: "+5 Initiative, cannot be surprised, hidden attackers don't get adv.", type: "passive", effect: "+5 Init, No Surprise" },
+    "Athlete": { name: "Athlete", description: "+1 Str/Dex, stand up with 5ft move, climb speed = walk speed.", type: "passive", effect: "+1 Str/Dex, Fast Stand" },
+    "Charger": { name: "Charger", description: "Dash action grants bonus action attack +5 dmg or push.", type: "active", effect: "Dash Attack Bonus" },
+    "Crossbow Expert": { name: "Crossbow Expert", description: "Ignore loading, no disadv in melee, bonus action hand crossbow attack.", type: "passive", effect: "Fast Reload, Melee Shoot" },
+    "Defensive Duelist": { name: "Defensive Duelist", description: "Reaction to add PB to AC vs melee attack with finesse weapon.", type: "active", effect: "Reaction AC Boost" },
+    "Dual Wielder": { name: "Dual Wielder", description: "+1 AC with two weapons, use non-light weapons, draw two at once.", type: "passive", effect: "+1 AC Dual Wield" },
+    "Dungeon Delver": { name: "Dungeon Delver", description: "Adv on secret door checks, adv vs traps, resist trap damage.", type: "passive", effect: "Trap Resist" },
+    "Durable": { name: "Durable", description: "+1 Con, min HP rolled on hit die is 2x Con mod.", type: "passive", effect: "+1 Con, Better Healing" },
+    "Elemental Adept": { name: "Elemental Adept", description: "Spells ignore resistance of chosen type, treat 1s as 2s.", type: "passive", effect: "Ignore Resistance" },
+    "Grappler": { name: "Grappler", description: "Adv on attacks vs grappled, pin creature.", type: "passive", effect: "Grapple Adv" },
+    "Great Weapon Master": { name: "Great Weapon Master", description: "-5 penalty to hit for +10 damage. Bonus attack on crit/kill.", type: "passive", effect: "-5 Hit / +10 Dmg" },
+    "Healer": { name: "Healer", description: "Use healer's kit to restore 1d6+4+Lvl HP.", type: "active", effect: "Kit Healing" },
+    "Heavily Armored": { name: "Heavily Armored", description: "+1 Str, Heavy Armor Proficiency.", type: "passive", effect: "+1 Str, Heavy Armor" },
+    "Heavy Armor Master": { name: "Heavy Armor Master", description: "+1 Str, reduce non-magical B/P/S damage by 3.", type: "passive", effect: "+1 Str, Dmg Reduct 3" },
+    "Inspiring Leader": { name: "Inspiring Leader", description: "10 min speech grants Lvl + Cha mod temp HP to 6 allies.", type: "active", effect: "Group Temp HP" },
+    "Keen Mind": { name: "Keen Mind", description: "+1 Int, always know north, recall anything from last month.", type: "passive", effect: "+1 Int, Perfect Memory" },
+    "Lightly Armored": { name: "Lightly Armored", description: "+1 Str/Dex, Light Armor Proficiency.", type: "passive", effect: "+1 Str/Dex, Light Armor" },
+    "Linguist": { name: "Linguist", description: "+1 Int, learn 3 languages, create ciphers.", type: "passive", effect: "+1 Int, Languages" },
+    "Lucky": { name: "Lucky", description: "3 Luck points to reroll d20s or enemy attacks.", type: "active", effect: "3 Luck Points" },
+    "Mage Slayer": { name: "Mage Slayer", description: "Reaction attack vs caster, adv on saves vs spells within 5ft.", type: "passive", effect: "Anti-Mage" },
+    "Magic Initiate": { name: "Magic Initiate", description: "Learn 2 cantrips and 1st lvl spell from a class.", type: "passive", effect: "Extra Spells" },
+    "Martial Adept": { name: "Martial Adept", description: "Learn 2 maneuvers and 1 superiority die (d6).", type: "active", effect: "Maneuvers" },
+    "Medium Armor Master": { name: "Medium Armor Master", description: "No disadv on stealth, Dex bonus to AC max +3.", type: "passive", effect: "Better Med Armor" },
+    "Mobile": { name: "Mobile", description: "+10 speed, dash ignores difficult terrain, melee attack prevents opportunity attacks.", type: "passive", effect: "+10 Speed, Free Disengage" },
+    "Moderately Armored": { name: "Moderately Armored", description: "+1 Str/Dex, Medium Armor & Shield Proficiency.", type: "passive", effect: "+1 Str/Dex, Med Armor" },
+    "Mounted Combatant": { name: "Mounted Combatant", description: "Adv vs unmounted smaller creatures, redirect attacks to self.", type: "passive", effect: "Mount Bonuses" },
+    "Observant": { name: "Observant", description: "+1 Int/Wis, +5 Passive Perception/Investigation, read lips.", type: "passive", effect: "+1 Int/Wis, +5 PP" },
+    "Polearm Master": { name: "Polearm Master", description: "Bonus attack with butt (d4), opportunity attack on enter reach.", type: "passive", effect: "Polearm Bonus" },
+    "Resilient": { name: "Resilient", description: "+1 to one stat, proficiency in that save.", type: "passive", effect: "+1 Stat, Save Prof" },
+    "Ritual Caster": { name: "Ritual Caster", description: "Cast ritual spells from a class book.", type: "active", effect: "Rituals" },
+    "Savage Attacker": { name: "Savage Attacker", description: "Reroll melee weapon damage dice once per turn.", type: "passive", effect: "Reroll Dmg" },
+    "Sentinel": { name: "Sentinel", description: "Hit opportunity attack stops movement, attack creature attacking ally.", type: "passive", effect: "Stop Move, Protect Ally" },
+    "Sharpshooter": { name: "Sharpshooter", description: "Ignore cover, long range, -5/+10 damage.", type: "passive", effect: "-5 Hit / +10 Dmg" },
+    "Shield Master": { name: "Shield Master", description: "Bonus shove, add shield AC to Dex saves, reaction for 0 dmg on save.", type: "active", effect: "Shield Bash, Evasion" },
+    "Skilled": { name: "Skilled", description: "Gain proficiency in 3 skills or tools.", type: "passive", effect: "3 Proficiencies" },
+    "Skulker": { name: "Skulker", description: "Hide when lightly obscured, no reveal on miss, no disadv on dim light perception.", type: "passive", effect: "Better Hiding" },
+    "Spell Sniper": { name: "Spell Sniper", description: "Double spell range, ignore cover, learn attack cantrip.", type: "passive", effect: "Double Range" },
+    "Tavern Brawler": { name: "Tavern Brawler", description: "+1 Str/Con, d4 unarmed, bonus grapple on hit.", type: "passive", effect: "+1 Str/Con, Grapple" },
+    "Tough": { name: "Tough", description: "+2 HP per level.", type: "passive", effect: "+2 HP/Lvl" },
+    "War Caster": { name: "War Caster", description: "Advantage on Con saves for spells, cast with weapons, reaction spell.", type: "passive", effect: "Adv. Concentration" },
+    "Weapon Master": { name: "Weapon Master", description: "+1 Str/Dex, proficiency with 4 weapons.", type: "passive", effect: "+1 Str/Dex, Weap Prof" },
+
+    // Xanathar's / Tasha's (Select popular ones)
+    "Elven Accuracy": { name: "Elven Accuracy", description: "+1 Dex/Int/Wis/Cha. Reroll one die when you have advantage (Elf/Half-Elf only).", type: "passive", effect: "Super Advantage" },
+    "Fey Touched": { name: "Fey Touched", description: "+1 Int/Wis/Cha. Learn Misty Step and 1st lvl Div/Ench spell.", type: "passive", effect: "+1 Stat, Misty Step" },
+    "Shadow Touched": { name: "Shadow Touched", description: "+1 Int/Wis/Cha. Learn Invisibility and 1st lvl Illu/Necro spell.", type: "passive", effect: "+1 Stat, Invisibility" },
+    "Telekinetic": { name: "Telekinetic", description: "+1 Int/Wis/Cha. Mage Hand range +30ft, bonus action shove.", type: "active", effect: "+1 Stat, Telekinesis" },
+    "Telepathic": { name: "Telepathic", description: "+1 Int/Wis/Cha. Telepathy 60ft, cast Detect Thoughts.", type: "passive", effect: "+1 Stat, Telepathy" },
+    "Chef": { name: "Chef", description: "+1 Con/Wis. Cook food for extra healing on short rest, treats for temp HP.", type: "active", effect: "+1 Stat, Cooking" },
+    "Crusher": { name: "Crusher", description: "+1 Str/Con. Bludgeoning moves 5ft, crit grants adv to all.", type: "passive", effect: "+1 Stat, Push" },
+    "Piercer": { name: "Piercer", description: "+1 Str/Dex. Reroll one pierce die, crit adds one die.", type: "passive", effect: "+1 Stat, Pierce Reroll" },
+    "Slasher": { name: "Slasher", description: "+1 Str/Dex. Slashing reduces speed 10ft, crit gives disadv.", type: "passive", effect: "+1 Stat, Slow" }
+};
+
+export const FEAT_OPTIONS = Object.values(FEAT_LIBRARY);

@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Static Game Data - Public Read, No Client Write
+    // (Admin SDK bypasses these rules for migration/updates)
+    
+    match /items/{document} { allow read: if true; allow write: if false; }
+    match /classes/{document} { allow read: if true; allow write: if false; }
+    match /spells/{document} { allow read: if true; allow write: if false; }
+    match /races/{document} { allow read: if true; allow write: if false; }
+    match /feats/{document} { allow read: if true; allow write: if false; }
+    match /backgrounds/{document} { allow read: if true; allow write: if false; }
+    match /enemies/{document} { allow read: if true; allow write: if false; }
+    match /skills/{document} { allow read: if true; allow write: if false; }
+
+    // Default deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

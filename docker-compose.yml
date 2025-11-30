@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  aiengine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: infinite-adventure-engine
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    # Uncomment if you need to pass Firebase credentials
+    # volumes:
+    #   - ./firebase-credentials.json:/app/firebase-credentials.json:ro
+    # environment:
+    #   - GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-credentials.json
