@@ -1,3 +1,4 @@
+
 # Settings for Backend (on Cloud Run).
 # See https://firebase.google.com/docs/app-hosting/configure#cloud-run
 runConfig:
@@ -8,16 +9,43 @@ runConfig:
   # memoryMiB: 512
 
 # Environment variables and secrets.
-# env:
+env:
   # Configure environment variables.
   # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
-  # - variable: MESSAGE
-  #   value: Hello world!
-  #   availability:
-  #     - BUILD
-  #     - RUNTIME
+  - variable: VITE_FIREBASE_API_KEY
+    value: "AIzaSyCQl1XCIDYJAFlCOa-bLouvgDL5NcpAdek"
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_AUTH_DOMAIN
+    value: "aiengi.firebaseapp.com"
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_PROJECT_ID
+    value: "aiengi"
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_STORAGE_BUCKET
+    value: "aiengi.firebasestorage.app"
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_MESSAGING_SENDER_ID
+    value: "670286214146"
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_APP_ID
+    value: "1:670286214146:web:99e18899ee5655882b631b"
+    availability:
+      - BUILD
+  - variable: VITE_GEMINI_API_KEY
+    value: "AIzaSyCQl1XCIDYJAFlCOa-bLouvgDL5NcpAdek
+    availability:
+      - BUILD
 
   # Grant access to secrets in Cloud Secret Manager.
   # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
-  # - variable: MY_SECRET
-  #   secret: mySecretRef
+  # For a more secure approach, you should use secrets.
+  # For example:
+  # - variable: VITE_GEMINI_API_KEY
+  #   secret: your-gemini-api-key-secret-name
+  #   availability:
+  #     - BUILD
