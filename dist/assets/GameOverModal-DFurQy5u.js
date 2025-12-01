@@ -1,4 +1,4 @@
-import{c as s,u as a,j as e}from"./index-CcI_FELb.js";import{S as o}from"./skull-BbBzc5rL.js";/**
+import{c as s,u as a,j as e}from"./index-BRA-cAqT.js";import{S as o}from"./skull-Dom6uW2J.js";/**
  * @license lucide-react v0.554.0 - ISC
  *
  * This source code is licensed under the ISC license.

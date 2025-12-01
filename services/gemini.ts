@@ -3,8 +3,8 @@ import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_PROMPT } from '../constants';
 import { GameState, ImageSize } from '../types';
 
-// Initialize the client. API_KEY is assumed to be available in process.env.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize the client. API_KEY is assumed to be available in the environment.
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 // Optimized for speed and capability
 const GM_MODEL = 'gemini-3.0-pro-preview';
