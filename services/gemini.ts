@@ -7,7 +7,7 @@ import { GameState, ImageSize } from '../types';
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Optimized for speed and capability
-const GM_MODEL = 'gemini-2.5-flash';
+const GM_MODEL = 'gemini-3.0-pro-preview';
 
 interface GeminiConfig {
     temperature?: number;
