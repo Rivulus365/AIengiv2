@@ -7,5 +7,8 @@
         "@upstash/context7-mcp"
       ]
     }
+  },
+  "enabledTools": {
+    "context7": []
   }
 }

@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { GameState, Item, ItemRarity, BaseStats, Equipment, Enemy, CombatLogEntry, Spell } from '../types';
 import { FEAT_OPTIONS, SPELL_LIBRARY, ITEM_LIBRARY } from '../constants';
 import { getModifier } from '../utils/engine';
@@ -8,7 +9,7 @@ import AdBanner from './AdBanner';
 import DiceAnimation from './DiceAnimation';
 import { useGameStore } from '../store/gameStore';
 
-// --- SHARED HELPERS --- (Kept same as before)
+// --- SHARED HELPERS ---
 const getRarityColor = (rarity?: ItemRarity) => {
     switch (rarity) {
         case 'uncommon': return 'text-emerald-400 border-emerald-900/50 shadow-emerald-900/20';
@@ -58,7 +59,7 @@ const getEquippedSlot = (item: Item, equipment: Equipment): Item | null => {
     return null;
 };
 
-// --- SUB-COMPONENTS --- (Kept same as before)
+// --- SUB-COMPONENTS ---
 const StatComparison: React.FC<{ label: string; current: string | number; compare: string | number; isBetter: boolean; isSame: boolean }> = ({ label, current, compare, isBetter, isSame }) => {
     if (isSame) return null;
     return (
@@ -75,7 +76,7 @@ const StatComparison: React.FC<{ label: string; current: string | number; compar
     );
 };
 
-const ItemTooltip: React.FC<{ item: Item; comparisonItem?: Item | null }> = ({ item, comparisonItem }) => {
+const TooltipContent: React.FC<{ item: Item; comparisonItem?: Item | null; position: { top: number; right: number } }> = ({ item, comparisonItem, position }) => {
     const libItem = ITEM_LIBRARY[item.name];
     const desc = item.description || libItem?.description;
     const effect = item.effect || libItem?.effect;
@@ -102,7 +103,10 @@ const ItemTooltip: React.FC<{ item: Item; comparisonItem?: Item | null }> = ({ i
     }
 
     return (
-        <div className={`absolute right-full top-0 mr-3 w-64 bg-[#0c0a09] border p-3 rounded shadow-[0_0_20px_rgba(0,0,0,0.8)] z-50 hidden group-hover:block group-focus-within:block animate-in fade-in zoom-in-95 duration-200 pointer-events-none ${getRarityBorder(rarity)}`}>
+        <div 
+            className={`fixed w-64 bg-[#0c0a09] border p-3 rounded shadow-[0_0_20px_rgba(0,0,0,0.8)] z-[100] animate-in fade-in zoom-in-95 duration-200 pointer-events-none ${getRarityBorder(rarity)}`}
+            style={{ top: position.top, right: position.right }}
+        >
             <div className="flex justify-between items-start mb-1 border-b border-stone-800 pb-1">
                 <h4 className={`font-display font-bold text-sm ${getRarityColor(rarity).split(' ')[0]}`}>{item.name}</h4>
                 <span className="text-[9px] uppercase tracking-widest text-stone-600">{rarity}</span>
@@ -130,6 +134,53 @@ const ItemTooltip: React.FC<{ item: Item; comparisonItem?: Item | null }> = ({ i
                 </div>
             )}
         </div>
+    );
+};
+
+const ItemTooltip: React.FC<{ item: Item; comparisonItem?: Item | null }> = ({ item, comparisonItem }) => {
+    const [position, setPosition] = useState<{ top: number; right: number } | null>(null);
+    const anchorRef = useRef<HTMLSpanElement>(null);
+
+    useEffect(() => {
+        const parent = anchorRef.current?.parentElement;
+        if (!parent) return;
+
+        const handleEnter = () => {
+            const rect = parent.getBoundingClientRect();
+            // Ensure it doesn't go off bottom edge (simple guard)
+            const safeTop = Math.min(rect.top, window.innerHeight - 300); // Assume 300px max height
+            
+            setPosition({
+                top: Math.max(10, safeTop),
+                right: window.innerWidth - rect.left + 10 // Position to the left of the item
+            });
+        };
+
+        const handleLeave = () => {
+            setPosition(null);
+        };
+
+        parent.addEventListener('mouseenter', handleEnter);
+        parent.addEventListener('mouseleave', handleLeave);
+        parent.addEventListener('focusin', handleEnter);
+        parent.addEventListener('focusout', handleLeave);
+
+        return () => {
+            parent.removeEventListener('mouseenter', handleEnter);
+            parent.removeEventListener('mouseleave', handleLeave);
+            parent.removeEventListener('focusin', handleEnter);
+            parent.removeEventListener('focusout', handleLeave);
+        };
+    }, []);
+
+    return (
+        <>
+            <span ref={anchorRef} className="hidden" aria-hidden="true" />
+            {position && createPortal(
+                <TooltipContent item={item} comparisonItem={comparisonItem} position={position} />,
+                document.body
+            )}
+        </>
     );
 };
 
@@ -522,7 +573,7 @@ const GameStateSidebar: React.FC = () => {
                     <div className="flex-1">
                         <div className="flex justify-between items-start">
                             <h2 className="text-xl font-display text-amber-100/90 tracking-wide leading-none">{gameState.player.name || "Unknown Hero"}</h2>
-                            <div className="flex items-center gap-1.5 bg-[#0c0a09]/50 px-2 py-0.5 rounded-full border border-amber-900/20" title={`Gold: ${gameState.player.gold || 0}`}>
+                            <div> className="flex items-center gap-1.5 bg-[#0c0a09]/50 px-2 py-0.5 rounded-full border border-amber-900/20" title={`Gold: ${gameState.player.gold || 0}`}
                                 <Coins className="w-3 h-3 text-amber-500" aria-hidden="true" />
                                 <span className="font-mono text-xs text-amber-200">{gameState.player.gold || 0}</span>
                             </div>
