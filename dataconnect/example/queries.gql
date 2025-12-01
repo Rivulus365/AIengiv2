@@ -1,0 +1,39 @@
+mutation CreateNewGameSession($name: String!, $description: String, $genre: String, $public: Boolean) @auth(level: USER) {
+  gameSession_insert(data: {
+    name: $name,
+    description: $description,
+    genre: $genre,
+    public: $public,
+    creatorId_expr: "auth.uid",
+    createdAt_expr: "request.time",
+    lastPlayedAt_expr: "request.time"
+  })
+}
+
+query ListPublicGameSessions @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  gameSessions(where: {public: {eq: true}}) {
+    id
+    name
+    description
+    genre
+  }
+}
+
+mutation CreateNewCharacter($name: String!, $backstory: String!, $characterClass: String!) @auth(level: USER) {
+  character_insert(data: {
+    name: $name,
+    backstory: $backstory,
+    characterClass: $characterClass,
+    ownerId_expr: "auth.uid",
+    createdAt_expr: "request.time"
+  })
+}
+
+query GetMyCharacters @auth(level: USER) {
+  characters(where: {ownerId: {eq_expr: "auth.uid"}}) {
+    id
+    name
+    characterClass
+    backstory
+  }
+}

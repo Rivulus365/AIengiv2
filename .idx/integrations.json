@@ -2,5 +2,6 @@
   "firebase_hosting": {
     "deploymentHostingUrl": "https://aiengi.web.app"
   },
+  "cloud_run_deploy": {},
   "secrets_manager": {}
 }
