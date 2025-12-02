@@ -6,7 +6,9 @@ import {
   signOut, 
   onAuthStateChanged, 
   User as FirebaseUser,
-  updateProfile
+  updateProfile,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 
 export interface User {
@@ -33,6 +35,12 @@ export const authService = {
 
   login: async (email: string, pass: string): Promise<User> => {
     const credential = await signInWithEmailAndPassword(auth, email, pass);
+    return mapUser(credential.user)!;
+  },
+  
+  loginWithGoogle: async (): Promise<User> => {
+    const provider = new GoogleAuthProvider();
+    const credential = await signInWithPopup(auth, provider);
     return mapUser(credential.user)!;
   },
 

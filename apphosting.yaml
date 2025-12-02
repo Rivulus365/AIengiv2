@@ -37,9 +37,10 @@ env:
     availability:
       - BUILD
   - variable: VITE_GEMINI_API_KEY
-    value: "AIzaSyCQl1XCIDYJAFlCOa-bLouvgDL5NcpAdek
+    secret: "GEMINI_API_KEY"
     availability:
       - BUILD
+      - RUNTIME
 
   # Grant access to secrets in Cloud Secret Manager.
   # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
