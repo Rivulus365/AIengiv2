@@ -1,80 +1,88 @@
-
-import { db } from './firebase';
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { GameState, ChatMessage } from '../types';
 
-const DB_COLLECTION = 'saves';
+const DB_NAME = 'InfiniteAdventureDB';
+const STORE_NAME = 'saves';
+const DB_VERSION = 1;
 const LOCAL_STORAGE_PREFIX = 'ia_rpg_save_';
 
-// Helper to sanitize data before saving to Firestore
-// Firestore doesn't like undefined values, so we replace them with null
-const sanitizeForFirestore = (obj: any): any => {
-  if (obj === undefined) return null;
-  if (obj === null) return null;
-  if (Array.isArray(obj)) {
-    return obj.map(sanitizeForFirestore);
-  }
-  if (typeof obj === 'object') {
-    const newObj: any = {};
-    for (const key in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        newObj[key] = sanitizeForFirestore(obj[key]);
+const openDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onerror = () => reject("Failed to open database");
+    request.onsuccess = () => resolve(request.result);
+
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
       }
-    }
-    return newObj;
-  }
-  return obj;
+    };
+  });
 };
 
 export const saveGame = async (userId: string, gameState: GameState, messages: ChatMessage[]) => {
   try {
-    const data = {
-      gameState: sanitizeForFirestore(gameState),
-      messages: sanitizeForFirestore(messages),
-      lastSaved: Date.now(),
-    };
-    
-    await setDoc(doc(db, DB_COLLECTION, userId), data);
+    const db = await openDB();
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const data = {
+        gameState,
+        messages,
+        lastSaved: Date.now(),
+      };
+      
+      const request = store.put(data, userId);
+      
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+      
+      tx.oncomplete = () => db.close();
+    });
   } catch (error) {
-    console.error('Failed to save game to Firestore:', error);
-    // Fallback to local storage if network fails
-    try {
-      localStorage.setItem(`${LOCAL_STORAGE_PREFIX}${userId}`, JSON.stringify({ gameState, messages }));
-    } catch (e) {
-      console.error('Failed fallback save to LocalStorage:', e);
-    }
+    console.error('Failed to save game to IndexedDB:', error);
   }
 };
 
 export const loadGame = async (userId: string): Promise<{ gameState: GameState; messages: ChatMessage[] } | null> => {
   try {
-    // 1. Try Firestore first
-    const docRef = doc(db, DB_COLLECTION, userId);
-    const docSnap = await getDoc(docRef);
+    // 1. Try IndexedDB first
+    const db = await openDB();
+    const idbData = await new Promise<any>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.get(userId);
+      
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+      
+      tx.oncomplete = () => db.close();
+    });
 
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      return { gameState: data.gameState, messages: data.messages };
+    if (idbData) {
+      return { gameState: idbData.gameState, messages: idbData.messages };
     }
 
-    // 2. Fallback: Check LocalStorage (migration or offline)
+    // 2. Fallback/Migration: Check LocalStorage
+    // This handles users migrating from the old version to the new version transparently
     const localKey = `${LOCAL_STORAGE_PREFIX}${userId}`;
     const localJson = localStorage.getItem(localKey);
     
     if (localJson) {
-      console.log('Migrating save from LocalStorage to Firestore...');
+      console.log('Migrating save from LocalStorage to IndexedDB...');
       try {
         const data = JSON.parse(localJson);
         
-        // Save to Firestore
+        // Save to IDB
         await saveGame(userId, data.gameState, data.messages);
         
-        // Clear LocalStorage to avoid confusion later, but maybe keep as backup?
-        // localStorage.removeItem(localKey);
+        // Clear LocalStorage to free up space
+        localStorage.removeItem(localKey);
         
         return { gameState: data.gameState, messages: data.messages };
       } catch (e) {
-        console.error("Migration/Local load failed:", e);
+        console.error("Migration failed:", e);
       }
     }
 
@@ -87,10 +95,19 @@ export const loadGame = async (userId: string): Promise<{ gameState: GameState; 
 
 export const clearSave = async (userId: string) => {
   try {
-    // Clear Firestore
-    await deleteDoc(doc(db, DB_COLLECTION, userId));
+    // Clear IDB
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.delete(userId);
+      
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+      tx.oncomplete = () => db.close();
+    });
 
-    // Clear LocalStorage
+    // Clear LocalStorage (just in case)
     localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}${userId}`);
     
   } catch (error) {

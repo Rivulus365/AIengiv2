@@ -135,6 +135,12 @@ export interface GameState {
   worldState: WorldState;
   combat: CombatState;
   combatLog: CombatLogEntry[];
+  lastRoll?: {
+    value: number;
+    isCrit: boolean;
+    isFail: boolean;
+    source: 'player' | 'enemy';
+  };
 }
 
 export type MessageRole = 'user' | 'model' | 'system';
@@ -144,6 +150,7 @@ export interface ChatMessage {
   role: MessageRole;
   text: string;
   image?: string;
+  isImageLoading?: boolean;
   gameStateSnapshot?: GameState;
   isLoading?: boolean;
 }
@@ -152,6 +159,15 @@ export enum ImageSize {
   Size_1K = '1K',
   Size_2K = '2K',
   Size_4K = '4K',
+}
+
+export type FontSize = 'small' | 'medium' | 'large';
+
+export interface ToastMessage {
+  id: string;
+  title: string;
+  message?: string;
+  type: 'success' | 'error' | 'info' | 'warning';
 }
 
 export interface SubclassDefinition {
@@ -196,4 +212,17 @@ export interface SkillDefinition {
   name: string;
   ability: keyof BaseStats;
   description: string;
+}
+
+// Data Transfer Object for Character Creation
+export interface CharacterCreationData {
+    name: string;
+    gender: string;
+    age: number;
+    race: string;
+    charClass: string;
+    stats: BaseStats;
+    feat: Feat;
+    subclass: string;
+    background: string;
 }

@@ -1,415 +1,446 @@
-import React, { useState, useEffect } from 'react';
-import { BaseStats, Feat, ClassDefinition, RaceDefinition } from '../types';
-import { GameDataService } from '../services/gameData';
-import { getModifier } from '../utils/engine';
-import { generateFantasyName } from '../utils/nameGenerator';
-import { Sword, Shield, Brain, User, Check, Wind, Eye, Crown, ArrowRight, ArrowLeft, Star, BookOpen, Loader2, Dices } from 'lucide-react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { useGameStore } from '../store/gameStore';
+import { CLASS_DEFINITIONS, RACE_DEFINITIONS, FEAT_OPTIONS, BACKGROUND_DEFINITIONS } from '../constants';
+import { BaseStats, Feat, CharacterCreationData } from '../types';
+import { calculateStatCost } from '../utils/engine';
+import { generateFantasyName } from '../utils/nameGenerator';
+import { Sword, Shield, Scroll, User, Dices, ChevronRight, ChevronLeft, Sparkles, BookOpen, Crown } from 'lucide-react';
+import Button from './design-system/Button';
+
+const STAT_NAMES: (keyof BaseStats)[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+const DEFAULT_STATS: BaseStats = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 };
 
 const CharacterCreator: React.FC = () => {
     const createCharacter = useGameStore(state => state.createCharacter);
+    const [step, setStep] = useState(1);
     
-    const [step, setStep] = useState(1); // 1: Identity, 2: Stats, 3: Feat
-    const [isLoading, setIsLoading] = useState(true);
-
-    const [classDefinitions, setClassDefinitions] = useState<Record<string, ClassDefinition>>({});
-    const [raceDefinitions, setRaceDefinitions] = useState<Record<string, RaceDefinition>>({});
-    const [featOptions, setFeatOptions] = useState<Feat[]>([]);
-
+    // Character Data State
     const [name, setName] = useState('');
     const [gender, setGender] = useState('');
-    const [age, setAge] = useState<number | ''>('');
-    const [race, setRace] = useState('');
-    const [charClass, setCharClass] = useState('');
-    const [selectedFeat, setSelectedFeat] = useState<Feat | null>(null);
+    const [age, setAge] = useState(25);
+    const [race, setRace] = useState('Human');
+    const [charClass, setCharClass] = useState('Warrior');
+    const [subclass, setSubclass] = useState('');
+    const [background, setBackground] = useState('Acolyte');
+    const [stats, setStats] = useState<BaseStats>({ ...DEFAULT_STATS });
+    const [pointsRemaining, setPointsRemaining] = useState(27);
+    const [selectedFeat, setSelectedFeat] = useState<Feat>(FEAT_OPTIONS[0]);
 
-    const [stats, setStats] = useState<BaseStats>({
-        str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10
-    });
+    const handleGenerateName = () => setName(generateFantasyName(race, gender));
 
-    useEffect(() => {
-        const loadData = async () => {
-            try {
-                const [classes, races, feats] = await Promise.all([
-                    GameDataService.getClasses(),
-                    GameDataService.getRaces(),
-                    GameDataService.getFeatOptions()
-                ]);
-                setClassDefinitions(classes);
-                setRaceDefinitions(races);
-                setFeatOptions(feats);
-
-                // Set defaults once data is loaded
-                const classKeys = Object.keys(classes);
-                const raceKeys = Object.keys(races);
-                if (classKeys.length > 0) setCharClass(classKeys[0]);
-                if (raceKeys.length > 0) setRace(raceKeys[0]);
-                if (feats.length > 0) setSelectedFeat(feats[0]);
-
-                setIsLoading(false);
-            } catch (error) {
-                console.error("Failed to load game data:", error);
-                setIsLoading(false);
+    const handleStatChange = (stat: keyof BaseStats, increment: boolean) => {
+        const currentVal = stats[stat];
+        const nextVal = increment ? currentVal + 1 : currentVal - 1;
+        
+        if (increment) {
+            if (currentVal >= 15) return;
+            const costDiff = calculateStatCost(nextVal) - calculateStatCost(currentVal);
+            if (pointsRemaining >= costDiff) {
+                setStats(prev => ({ ...prev, [stat]: nextVal }));
+                setPointsRemaining(prev => prev - costDiff);
             }
-        };
-        loadData();
-    }, []);
-
-    const POINTS_BUDGET = 12;
-
-    // Calculate used points based on deviation from 10
-    const usedPoints = (Object.values(stats) as number[]).reduce((a: number, b: number) => a + (b - 10), 0);
-    const remainingPoints = POINTS_BUDGET - usedPoints;
-
-    const currentClassDef = classDefinitions[charClass];
-    const currentRaceDef = raceDefinitions[race];
-
-    const increment = (stat: keyof BaseStats) => {
-        if (remainingPoints > 0 && stats[stat] < 18) {
-            setStats({ ...stats, [stat]: stats[stat] + 1 });
+        } else {
+            if (currentVal <= 8) return;
+            const costDiff = calculateStatCost(currentVal) - calculateStatCost(nextVal);
+            setStats(prev => ({ ...prev, [stat]: nextVal }));
+            setPointsRemaining(prev => prev + costDiff);
         }
     };
 
-    const decrement = (stat: keyof BaseStats) => {
-        if (stats[stat] > 10) {
-            setStats({ ...stats, [stat]: stats[stat] - 1 });
-        }
+    const handleSubmit = () => {
+        if (!name || !gender || !charClass || !race || !background) return;
+        createCharacter({ name, gender, age, race, charClass, stats, feat: selectedFeat, subclass, background });
     };
 
-    const handleRandomizeName = () => {
-        const newName = generateFantasyName(race, gender);
-        setName(newName);
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (name && gender && age && remainingPoints === 0 && selectedFeat && currentClassDef && currentRaceDef) {
-            // Merge Base Stats with Class & Race Bonuses
-            const finalStats = { ...stats };
-            
-            if (currentClassDef.statBonuses) {
-                (Object.keys(currentClassDef.statBonuses) as Array<keyof BaseStats>).forEach((key) => {
-                    finalStats[key] = (finalStats[key] || 0) + (currentClassDef.statBonuses[key] || 0);
-                });
-            }
-            if (currentRaceDef.statBonuses) {
-                (Object.keys(currentRaceDef.statBonuses) as Array<keyof BaseStats>).forEach((key) => {
-                    finalStats[key] = (finalStats[key] || 0) + (currentRaceDef.statBonuses[key] || 0);
-                });
-            }
-
-            createCharacter(name, gender, Number(age), race, charClass, finalStats, selectedFeat);
-        }
-    };
-
-    const statConfig = [
-        { key: 'str', label: 'Strength', icon: Sword, color: 'text-red-700', bg: 'bg-red-900/20', border: 'border-red-900/30' },
-        { key: 'dex', label: 'Dexterity', icon: Wind, color: 'text-emerald-700', bg: 'bg-emerald-900/20', border: 'border-emerald-900/30' },
-        { key: 'con', label: 'Constitution', icon: Shield, color: 'text-amber-700', bg: 'bg-amber-900/20', border: 'border-amber-900/30' },
-        { key: 'int', label: 'Intelligence', icon: Brain, color: 'text-blue-700', bg: 'bg-blue-900/20', border: 'border-blue-900/30' },
-        { key: 'wis', label: 'Wisdom', icon: Eye, color: 'text-violet-700', bg: 'bg-violet-900/20', border: 'border-violet-900/30' },
-        { key: 'cha', label: 'Charisma', icon: Crown, color: 'text-rose-700', bg: 'bg-rose-900/20', border: 'border-rose-900/30' },
+    const steps = [
+        { id: 1, title: "Identity", icon: User },
+        { id: 2, title: "Lineage", icon: Crown },
+        { id: 3, title: "Class", icon: Sword },
+        { id: 4, title: "Background", icon: BookOpen },
+        { id: 5, title: "Stats", icon: Dices },
+        { id: 6, title: "Feat", icon: Sparkles },
     ];
 
-    if (isLoading || !currentClassDef || !currentRaceDef || !selectedFeat) {
-        return (
-            <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-50">
-                <div className="text-amber-500 flex flex-col items-center gap-4">
-                    <Loader2 className="w-10 h-10 animate-spin" />
-                    <p className="font-display tracking-widest">Summoning Archives...</p>
-                </div>
-            </div>
-        );
-    }
+    const selectedClassDef = CLASS_DEFINITIONS[charClass];
+    const subclasses = useMemo(() => selectedClassDef.subclasses ? Object.values(selectedClassDef.subclasses) : [], [selectedClassDef]);
+
+    useEffect(() => {
+        if (subclasses.length > 0 && (!subclass || !subclasses.find(s => s.name === subclass))) {
+            setSubclass(subclasses[0].name);
+        } else if (subclasses.length === 0) {
+            setSubclass('');
+        }
+    }, [charClass, subclasses, subclass]);
+
+    const progress = (step / steps.length) * 100;
 
     return (
-        <div role="dialog" aria-modal="true" aria-labelledby="modal-title" className="fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] animate-in fade-in duration-500">
-            <div className="bg-[#1c1917] border border-[#44403c] p-1 rounded-lg shadow-[0_0_100px_rgba(251,191,36,0.1)] max-w-2xl w-full relative overflow-hidden flex flex-col h-[80vh] animate-float">
-                <div className="absolute top-0 left-0 w-20 h-20 bg-gradient-to-br from-amber-900/20 to-transparent pointer-events-none animate-torch" aria-hidden="true" />
-                <div className="absolute bottom-0 right-0 w-20 h-20 bg-gradient-to-tl from-amber-900/20 to-transparent pointer-events-none animate-torch" aria-hidden="true" />
+        <div className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4">
+            
+            {/* Background Ambience */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.05)_0%,transparent_70%)] pointer-events-none"></div>
 
-                <div className="p-8 border border-[#292524] rounded h-full relative z-10 flex flex-col">
-
-                    {/* Header */}
-                    <div className="text-center mb-6">
-                        <div className="flex justify-center items-center gap-2 mb-2" role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={3} aria-label="Creation Progress">
-                            {[1, 2, 3].map(i => (
-                                <div key={i} className={`h-1.5 w-8 rounded-full transition-colors ${step >= i ? 'bg-amber-600 shadow-[0_0_10px_rgba(217,119,6,0.5)]' : 'bg-[#292524]'}`} />
-                            ))}
-                        </div>
-                        <h2 id="modal-title" className="text-3xl font-display text-shimmer">
-                            {step === 1 && "Identity & Origin"}
-                            {step === 2 && "Ability Scores"}
-                            {step === 3 && "Feats & Talents"}
-                        </h2>
+            <div className="relative w-full max-w-5xl h-full max-h-[85dvh] flex flex-col md:flex-row glass-panel rounded-2xl overflow-hidden shadow-2xl animate-scale-in border border-white/10">
+                
+                {/* Sidebar Navigation */}
+                <div className="w-full md:w-64 bg-black/40 border-b md:border-b-0 md:border-r border-white/5 p-6 flex flex-col shrink-0">
+                    <h2 className="text-2xl font-display font-bold text-stone-100 mb-2">Creation</h2>
+                    <p className="text-xs text-stone-500 mb-8">Forge your legend.</p>
+                    
+                    <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar md:block hidden">
+                        {steps.map((s) => (
+                            <button
+                                key={s.id}
+                                onClick={() => step > s.id && setStep(s.id)}
+                                disabled={step < s.id}
+                                className={`w-full flex items-center gap-3 p-3 rounded-lg text-sm font-bold transition-all text-left ${
+                                    step === s.id 
+                                    ? 'bg-amber-900/20 text-amber-400 border border-amber-900/30' 
+                                    : step > s.id 
+                                        ? 'text-emerald-500 hover:bg-white/5' 
+                                        : 'text-stone-600 cursor-not-allowed'
+                                }`}
+                            >
+                                <s.icon className="w-4 h-4" />
+                                {s.title}
+                                {step > s.id && <CheckIcon className="w-3 h-3 ml-auto" />}
+                            </button>
+                        ))}
                     </div>
 
-                    <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+                    {/* Mobile Progress Bar */}
+                    <div className="md:hidden w-full h-1 bg-stone-800 rounded-full mb-4">
+                        <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                    </div>
+                </div>
 
-                        <div className="flex-1 overflow-y-auto custom-scrollbar px-1">
-                            {/* STEP 1: IDENTITY */}
-                            {step === 1 && (
-                                <div className="space-y-6 animate-in slide-in-from-right fade-in duration-300">
-                                    {/* Name */}
+                {/* Main Content Area - Flex Column with proper overflow handling */}
+                <div className="flex-1 flex flex-col min-w-0 bg-[#0c0a09]/50 overflow-hidden">
+                    
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar">
+                        {step === 1 && (
+                            <div className="space-y-8 animate-fade-in">
+                                <h3 className="text-3xl font-display text-stone-100">Who are you?</h3>
+                                <div className="space-y-6 max-w-lg">
                                     <div>
-                                        <label htmlFor="char-name" className="block text-amber-500/80 mb-2 font-display tracking-widest text-xs uppercase">Name</label>
-                                        <div className="relative group">
-                                            <User className="absolute left-3 top-3 text-stone-600 w-5 h-5 group-focus-within:text-amber-500 transition-colors" aria-hidden="true" />
-                                            <input
-                                                id="char-name"
-                                                type="text"
+                                        <label className="text-xs uppercase font-bold text-stone-500 tracking-widest mb-2 block">Character Name</label>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                type="text" 
                                                 value={name}
                                                 onChange={(e) => setName(e.target.value)}
-                                                className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 rounded p-2 pl-10 pr-12 focus:outline-none focus:border-amber-700/50 transition-all font-serif text-lg placeholder-stone-700 focus:shadow-[0_0_15px_rgba(245,158,11,0.1)]"
-                                                placeholder="Enter thy name..."
-                                                required
-                                                autoFocus
+                                                className="flex-1 bg-black/40 border border-stone-800 rounded-lg p-4 text-lg text-stone-200 focus:border-amber-600 focus:outline-none transition-colors placeholder-stone-700"
+                                                placeholder="Enter a name..."
                                             />
-                                            <button
-                                                type="button"
-                                                onClick={handleRandomizeName}
-                                                className="absolute right-2 top-2 p-1 text-stone-500 hover:text-amber-500 transition-colors rounded hover:bg-stone-800"
-                                                title="Randomize Name"
-                                            >
-                                                <Dices className="w-5 h-5" />
+                                            <button onClick={handleGenerateName} className="p-4 bg-stone-900 border border-stone-800 rounded-lg hover:text-amber-500 transition-colors" title="Randomize">
+                                                <Dices className="w-6 h-6" />
                                             </button>
                                         </div>
                                     </div>
-
-                                    {/* Gender & Age */}
-                                    <div className="grid grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label htmlFor="char-gender" className="block text-amber-500/80 mb-2 font-display tracking-widest text-xs uppercase">Gender / Identity</label>
-                                            <input
-                                                id="char-gender"
-                                                type="text"
+                                            <label className="text-xs uppercase font-bold text-stone-500 tracking-widest mb-2 block">Gender</label>
+                                            <select 
                                                 value={gender}
                                                 onChange={(e) => setGender(e.target.value)}
-                                                className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 rounded p-3 focus:outline-none focus:border-amber-700/50 transition-all font-serif placeholder-stone-700"
-                                                placeholder="Male, Female, Non-binary..."
-                                                required
-                                            />
+                                                className="w-full bg-black/40 border border-stone-800 rounded-lg p-4 text-stone-300 focus:border-amber-600 focus:outline-none appearance-none cursor-pointer"
+                                            >
+                                                <option value="" disabled>Select...</option>
+                                                <option value="Male">Male</option>
+                                                <option value="Female">Female</option>
+                                                <option value="Non-Binary">Non-Binary</option>
+                                            </select>
                                         </div>
                                         <div>
-                                            <label htmlFor="char-age" className="block text-amber-500/80 mb-2 font-display tracking-widest text-xs uppercase">Age</label>
-                                            <input
-                                                id="char-age"
-                                                type="number"
-                                                min="1"
-                                                max="999"
+                                            <label className="text-xs uppercase font-bold text-stone-500 tracking-widest mb-2 block">Age</label>
+                                            <input 
+                                                type="number" 
                                                 value={age}
-                                                onChange={(e) => setAge(parseInt(e.target.value))}
-                                                className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 rounded p-3 focus:outline-none focus:border-amber-700/50 transition-all font-serif placeholder-stone-700"
-                                                placeholder="Years"
-                                                required
+                                                onChange={(e) => setAge(Number(e.target.value))}
+                                                className="w-full bg-black/40 border border-stone-800 rounded-lg p-4 text-stone-300 focus:border-amber-600 focus:outline-none"
                                             />
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                        )}
 
-                                    {/* Race & Class */}
-                                    <div className="grid md:grid-cols-2 gap-6">
-                                        <div>
-                                            <label htmlFor="char-race" className="block text-amber-500/80 mb-2 font-display tracking-widest text-xs uppercase">Race</label>
-                                            <div className="relative">
-                                                <select
-                                                    id="char-race"
-                                                    value={race}
-                                                    onChange={(e) => setRace(e.target.value)}
-                                                    className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 rounded p-3 focus:outline-none focus:border-amber-700/50 transition-all font-serif appearance-none cursor-pointer hover:border-amber-900/50"
-                                                >
-                                                    {Object.keys(raceDefinitions).map(r => (
-                                                        <option key={r} value={r}>{r}</option>
-                                                    ))}
-                                                </select>
-                                                <div className="absolute right-3 top-3 pointer-events-none text-stone-500" aria-hidden="true">▼</div>
+                        {step === 2 && (
+                            <div className="space-y-6 animate-fade-in">
+                                <h3 className="text-3xl font-display text-stone-100">Choose your Ancestry</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {Object.values(RACE_DEFINITIONS).map(r => (
+                                        <button
+                                            key={r.name}
+                                            onClick={() => setRace(r.name)}
+                                            className={`relative min-h-[140px] p-5 rounded-xl border text-left transition-all overflow-hidden group ${race === r.name ? 'bg-amber-900/20 border-amber-500/50 ring-1 ring-amber-500/20' : 'bg-black/20 border-white/5 hover:bg-white/5 hover:border-white/10'}`}
+                                        >
+                                            {/* Normal Content */}
+                                            <div className="h-full flex flex-col transition-all duration-300 group-hover:opacity-0 group-hover:scale-95">
+                                                <div className={`font-bold text-lg mb-2 ${race === r.name ? 'text-amber-200' : 'text-stone-300'}`}>{r.name}</div>
+                                                <div className="text-xs text-stone-500 leading-relaxed line-clamp-4">{r.description}</div>
+                                                
+                                                {race === r.name && (
+                                                    <div className="mt-auto pt-4">
+                                                        <span className="text-[10px] uppercase font-bold text-amber-500 tracking-widest flex items-center gap-2">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></div> 
+                                                            Selected
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
-                                            <p className="text-[10px] text-stone-500 mt-1 italic">{currentRaceDef.description}</p>
-                                        </div>
 
-                                        <div>
-                                            <label htmlFor="char-class" className="block text-amber-500/80 mb-2 font-display tracking-widest text-xs uppercase">Class</label>
-                                            <div className="relative">
-                                                <select
-                                                    id="char-class"
-                                                    value={charClass}
-                                                    onChange={(e) => setCharClass(e.target.value)}
-                                                    className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 rounded p-3 focus:outline-none focus:border-amber-700/50 transition-all font-serif appearance-none cursor-pointer hover:border-amber-900/50"
-                                                >
-                                                    {Object.keys(classDefinitions).map(c => (
-                                                        <option key={c} value={c}>{c}</option>
-                                                    ))}
-                                                </select>
-                                                <div className="absolute right-3 top-3 pointer-events-none text-stone-500" aria-hidden="true">▼</div>
+                                            {/* Hover Overlay */}
+                                            <div className="absolute inset-0 bg-[#151413] p-5 flex flex-col gap-3 opacity-0 group-hover:opacity-100 transition-all duration-300 scale-105 group-hover:scale-100 z-10">
+                                                <div>
+                                                    <span className="text-[10px] uppercase font-bold text-stone-500 block mb-1">Traits</span>
+                                                    <div className="text-xs text-stone-300 leading-snug">
+                                                        {r.traits.join(", ")}
+                                                    </div>
+                                                </div>
+                                                {r.statBonuses && (
+                                                    <div>
+                                                        <span className="text-[10px] uppercase font-bold text-stone-500 block mb-1">Bonuses</span>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {Object.entries(r.statBonuses).map(([s, v]) => (
+                                                                <span key={s} className="px-1.5 py-0.5 bg-stone-800 rounded text-[10px] text-emerald-400 font-mono uppercase">{s} +{v}</span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                            <p className="text-[10px] text-stone-500 mt-1 italic">{currentClassDef.description}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 3 && (
+                            <div className="space-y-6 animate-fade-in">
+                                <h3 className="text-3xl font-display text-stone-100">Select your Path</h3>
+                                
+                                {/* Horizontal Class Scroller */}
+                                <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar mask-gradient">
+                                    {Object.values(CLASS_DEFINITIONS).map(c => (
+                                        <button
+                                            key={c.name}
+                                            onClick={() => setCharClass(c.name)}
+                                            className={`px-6 py-3 rounded-lg border whitespace-nowrap font-bold transition-all ${charClass === c.name ? 'bg-amber-900/20 border-amber-500 text-amber-100' : 'bg-black/20 border-white/5 text-stone-500 hover:text-stone-300'}`}
+                                        >
+                                            {c.name}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="glass-panel p-6 rounded-xl space-y-6">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <h4 className="text-xl font-display text-amber-500">{selectedClassDef.name}</h4>
+                                            <span className="text-[10px] bg-stone-800 px-2 py-1 rounded text-stone-400 uppercase tracking-widest">Hit Die: d{selectedClassDef.hitDie}</span>
                                         </div>
+                                        <p className="text-lg text-stone-300 font-serif italic">"{selectedClassDef.description}"</p>
                                     </div>
                                     
-                                    <div className="bg-[#0c0a09]/50 p-4 rounded border border-[#292524] text-sm animate-in zoom-in-95 duration-300">
-                                        <h4 className="text-amber-500 font-display mb-2 border-b border-[#292524] pb-1">Combined Traits</h4>
-                                        <div className="flex flex-wrap gap-2 mb-2">
-                                            {currentRaceDef.traits.map((trait, i) => (
-                                                <span key={i} className="text-[10px] bg-stone-900 border border-stone-800 px-1.5 py-0.5 rounded text-stone-300">{trait}</span>
-                                            ))}
+                                    <div className="h-px bg-white/5 w-full"></div>
+                                    
+                                    {subclasses.length > 0 && (
+                                        <div>
+                                            <label className="text-xs uppercase font-bold text-stone-500 tracking-widest mb-3 block">Subclass Specialization</label>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {subclasses.map(s => (
+                                                    <button
+                                                        key={s.name}
+                                                        onClick={() => setSubclass(s.name)}
+                                                        className={`relative min-h-[140px] p-4 rounded-xl border text-left transition-all overflow-hidden group ${subclass === s.name ? 'bg-amber-950/40 border-amber-600/50' : 'bg-black/20 border-white/5 hover:bg-white/5'}`}
+                                                    >
+                                                        {/* Normal View */}
+                                                        <div className="h-full flex flex-col transition-all duration-300 group-hover:opacity-0 group-hover:scale-95">
+                                                            <div className={`font-bold text-sm mb-1 ${subclass === s.name ? 'text-amber-200' : 'text-stone-300'}`}>{s.name}</div>
+                                                            <div className="text-xs text-stone-500 leading-relaxed">{s.description}</div>
+                                                            
+                                                            {subclass === s.name && (
+                                                                <div className="mt-auto pt-3">
+                                                                    <span className="text-[9px] uppercase font-bold text-amber-500 tracking-widest flex items-center gap-2">
+                                                                        <div className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"></div> 
+                                                                        Active
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Hover Overlay */}
+                                                        <div className="absolute inset-0 bg-[#151413] p-4 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 scale-105 group-hover:scale-100 z-10 justify-center">
+                                                            {s.features && s.features.length > 0 && (
+                                                                <div>
+                                                                    <span className="text-[9px] uppercase font-bold text-stone-500 block mb-1">Features</span>
+                                                                    <div className="flex flex-wrap gap-1">
+                                                                        {s.features.map(f => (
+                                                                            <span key={f} className="px-1.5 py-0.5 bg-stone-800 rounded text-[9px] text-stone-300 border border-white/5">{f}</span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {s.statBonuses && (
+                                                                <div className="mt-1">
+                                                                    <span className="text-[9px] uppercase font-bold text-stone-500 block mb-1">Bonuses</span>
+                                                                    <div className="flex flex-wrap gap-1">
+                                                                        {Object.entries(s.statBonuses).map(([stat, val]) => (
+                                                                            <span key={stat} className="px-1.5 py-0.5 bg-stone-800 rounded text-[9px] text-emerald-400 font-mono uppercase">{stat} +{val}</span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <div className="space-y-1">
-                                            <div className="flex justify-between text-xs">
-                                                <span className="text-stone-500 uppercase">Hit Die:</span>
-                                                <span className="text-stone-300 font-mono">d{currentClassDef.hitDie}</span>
-                                            </div>
-                                            <div className="flex justify-between text-xs">
-                                                <span className="text-stone-500 uppercase">Speed:</span>
-                                                <span className="text-stone-300 font-mono">{currentRaceDef.speed} ft</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
-                            )}
+                            </div>
+                        )}
 
-                            {/* STEP 2: STATS */}
-                            {step === 2 && (
-                                <div className="space-y-4 animate-in slide-in-from-right fade-in duration-300">
-                                    <div className="bg-amber-900/10 p-3 rounded border border-amber-900/30 text-center mb-2 animate-pulse-amber">
-                                        <span className={`font-mono text-xl font-bold ${remainingPoints === 0 ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                            {remainingPoints}
-                                        </span>
-                                        <span className="text-stone-500 text-xs uppercase tracking-widest block">Points Remaining</span>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        {statConfig.map((stat) => {
-                                            // Calculate bonuses
-                                            const classBonus = currentClassDef.statBonuses[stat.key as keyof BaseStats] || 0;
-                                            const raceBonus = currentRaceDef.statBonuses[stat.key as keyof BaseStats] || 0;
-                                            const totalBonus = classBonus + raceBonus;
-                                            
-                                            const total = stats[stat.key as keyof BaseStats] + totalBonus;
-                                            const modifier = getModifier(total);
-                                            const modString = modifier >= 0 ? `+${modifier}` : `${modifier}`;
-                                            const modColor = modifier > 0 ? 'text-emerald-400' : modifier < 0 ? 'text-red-400' : 'text-stone-500';
-                                            const modBg = modifier > 0 ? 'bg-emerald-950/30 border-emerald-900/50' : modifier < 0 ? 'bg-red-950/30 border-red-900/50' : 'bg-[#1c1917] border-[#292524]';
-
-                                            return (
-                                                <div key={stat.key} className="flex items-center justify-between p-2 rounded hover:bg-[#292524]/50 transition-colors">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`${stat.bg} p-1.5 rounded border ${stat.border}`}>
-                                                            <stat.icon className={`w-4 h-4 ${stat.color}`} aria-hidden="true" />
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="text-stone-300 font-serif" id={`label-${stat.key}`}>{stat.label}</span>
-                                                            {totalBonus > 0 && <span className="text-[10px] text-emerald-500">+{totalBonus} Bonus</span>}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => decrement(stat.key as keyof BaseStats)}
-                                                            className="w-8 h-8 rounded hover:bg-[#292524] text-stone-500 hover:text-stone-300 flex items-center justify-center border border-transparent hover:border-[#292524] transition-all disabled:opacity-20"
-                                                            disabled={stats[stat.key as keyof BaseStats] <= 10}
-                                                            aria-label={`Decrease ${stat.label}`}
-                                                        >
-                                                            -
-                                                        </button>
-                                                        <div className="flex flex-col items-center w-12">
-                                                            <span className="text-stone-100 font-mono text-lg" aria-labelledby={`label-${stat.key}`}>{total}</span>
-                                                            <div className={`text-[10px] font-mono px-1.5 rounded border ${modBg} ${modColor} transition-colors`}>
-                                                                {modString}
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => increment(stat.key as keyof BaseStats)}
-                                                            className="w-8 h-8 rounded hover:bg-[#292524] text-stone-500 hover:text-stone-300 flex items-center justify-center border border-transparent hover:border-[#292524] transition-all disabled:opacity-20"
-                                                            disabled={remainingPoints <= 0 || stats[stat.key as keyof BaseStats] >= 18}
-                                                            aria-label={`Increase ${stat.label}`}
-                                                        >
-                                                            +
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
+                        {step === 4 && (
+                            <div className="space-y-6 animate-fade-in">
+                                <h3 className="text-3xl font-display text-stone-100">Character Origin</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+                                    {Object.values(BACKGROUND_DEFINITIONS).map(bg => (
+                                        <button
+                                            key={bg.name}
+                                            onClick={() => setBackground(bg.name)}
+                                            className={`p-4 rounded-xl border text-left transition-all ${background === bg.name ? 'bg-amber-900/20 border-amber-500/50' : 'bg-black/20 border-white/5 hover:bg-white/5'}`}
+                                        >
+                                            <div className={`font-bold ${background === bg.name ? 'text-amber-200' : 'text-stone-400'}`}>{bg.name}</div>
+                                        </button>
+                                    ))}
                                 </div>
-                            )}
-
-                            {/* STEP 3: FEATS */}
-                            {step === 3 && (
-                                <div className="space-y-4 animate-in slide-in-from-right fade-in duration-300">
-                                    <div className="text-center text-stone-400 text-sm mb-4">
-                                        Choose a special feat to distinguish your hero.
-                                    </div>
-                                    <div role="radiogroup" aria-label="Select a Feat" className="grid grid-cols-1 gap-3 max-h-[400px]">
-                                        {featOptions.map((feat) => (
-                                            <div
-                                                key={feat.name}
-                                                role="radio"
-                                                aria-checked={selectedFeat?.name === feat.name}
-                                                tabIndex={0}
-                                                onClick={() => setSelectedFeat(feat)}
-                                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedFeat(feat) }}
-                                                className={`p-3 rounded cursor-pointer border transition-all duration-200 flex items-start gap-3 outline-none focus:ring-1 focus:ring-amber-500
-                                            ${selectedFeat?.name === feat.name
-                                                        ? 'bg-amber-900/20 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
-                                                        : 'bg-[#0c0a09] border-[#292524] hover:border-stone-600'}
-                                        `}
-                                            >
-                                                <div className={`mt-1 p-1 rounded-full ${selectedFeat?.name === feat.name ? 'text-amber-500' : 'text-stone-600'}`}>
-                                                    {selectedFeat?.name === feat.name ? <Check className="w-4 h-4" aria-hidden="true" /> : <Star className="w-4 h-4" aria-hidden="true" />}
-                                                </div>
-                                                <div>
-                                                    <h4 className={`font-display font-bold ${selectedFeat?.name === feat.name ? 'text-amber-100' : 'text-stone-300'}`}>{feat.name}</h4>
-                                                    <p className="text-xs text-stone-400 italic mb-1">{feat.description}</p>
-                                                    <p className="text-[10px] text-emerald-500/80 uppercase tracking-wider">{feat.effect}</p>
-                                                </div>
-                                            </div>
+                                <div className="glass-panel p-4 rounded-xl">
+                                    <div className="text-stone-300 mb-2">{BACKGROUND_DEFINITIONS[background]?.description}</div>
+                                    <div className="flex gap-2 flex-wrap">
+                                        {BACKGROUND_DEFINITIONS[background]?.skillProficiencies.map(sk => (
+                                            <span key={sk} className="px-2 py-1 rounded bg-stone-800 text-xs text-stone-300">{sk}</span>
                                         ))}
                                     </div>
                                 </div>
-                            )}
+                            </div>
+                        )}
+
+                        {step === 5 && (
+                            <div className="space-y-8 animate-fade-in max-w-2xl mx-auto">
+                                <div className="text-center space-y-1">
+                                    <div className="text-5xl font-display font-bold text-amber-500 drop-shadow-glow">{pointsRemaining}</div>
+                                    <div className="text-xs uppercase tracking-widest text-stone-500">Points Remaining</div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {STAT_NAMES.map(stat => {
+                                        const racial = RACE_DEFINITIONS[race]?.statBonuses[stat] || 0;
+                                        const current = stats[stat];
+                                        const total = current + racial;
+                                        const costNext = calculateStatCost(current + 1) - calculateStatCost(current);
+                                        const costPrev = calculateStatCost(current) - calculateStatCost(current - 1);
+
+                                        return (
+                                            <div key={stat} className="flex items-center gap-4 glass-panel p-3 rounded-xl">
+                                                <div className="w-12 font-bold uppercase text-stone-400">{stat}</div>
+                                                <div className="flex-1 h-2 bg-stone-900 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-stone-600" style={{ width: `${(total/20)*100}%` }}></div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <button 
+                                                        onClick={() => handleStatChange(stat, false)}
+                                                        className="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 text-stone-400 flex items-center justify-center transition-colors disabled:opacity-30"
+                                                        disabled={current <= 8}
+                                                    >
+                                                        -
+                                                    </button>
+                                                    <div className="w-8 text-center font-mono font-bold text-xl text-stone-200">{total}</div>
+                                                    <button 
+                                                        onClick={() => handleStatChange(stat, true)}
+                                                        className="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 text-stone-400 flex items-center justify-center transition-colors disabled:opacity-30"
+                                                        disabled={current >= 15 || pointsRemaining < costNext}
+                                                    >
+                                                        +
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 6 && (
+                            <div className="space-y-6 animate-fade-in">
+                                <h3 className="text-3xl font-display text-stone-100">Select a Feat</h3>
+                                <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
+                                    {FEAT_OPTIONS.map((feat, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => setSelectedFeat(feat)}
+                                            className={`w-full p-4 rounded-xl border text-left transition-all group ${selectedFeat.name === feat.name ? 'bg-amber-900/20 border-amber-500/50' : 'bg-black/20 border-white/5 hover:bg-white/5'}`}
+                                        >
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className={`font-bold ${selectedFeat.name === feat.name ? 'text-amber-200' : 'text-stone-300'}`}>{feat.name}</span>
+                                                <span className="text-[10px] uppercase tracking-widest text-stone-600 bg-black/40 px-2 py-0.5 rounded">{feat.type}</span>
+                                            </div>
+                                            <div className="text-sm text-stone-500 group-hover:text-stone-400 transition-colors">{feat.description}</div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Footer Controls - Fixed at bottom of flex column */}
+                    <div className="p-6 border-t border-white/5 bg-black/40 backdrop-blur flex justify-between items-center shrink-0">
+                        <Button 
+                            onClick={() => setStep(Math.max(1, step - 1))}
+                            disabled={step === 1}
+                            variant="ghost"
+                            leftIcon={<ChevronLeft className="w-4 h-4" />}
+                        >
+                            Back
+                        </Button>
+
+                        <div className="flex gap-2">
+                            {steps.map(s => (
+                                <div key={s.id} className={`w-2 h-2 rounded-full transition-all ${step === s.id ? 'bg-amber-500 w-4' : step > s.id ? 'bg-emerald-500' : 'bg-stone-800'}`}></div>
+                            ))}
                         </div>
 
-                        {/* Footer Controls */}
-                        <div className="mt-6 pt-4 border-t border-[#292524] flex justify-between gap-4">
-                            {step > 1 ? (
-                                <button
-                                    type="button"
-                                    onClick={() => setStep(step - 1)}
-                                    className="px-6 py-2 rounded text-stone-400 hover:text-stone-200 border border-transparent hover:border-[#292524] flex items-center gap-2 transition-colors"
-                                >
-                                    <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back
-                                </button>
-                            ) : (
-                                <div /> // Spacer
-                            )}
-
-                            {step < 3 ? (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (step === 1 && name && gender && age) setStep(2);
-                                        if (step === 2 && remainingPoints === 0) setStep(3);
-                                    }}
-                                    disabled={(step === 1 && (!name || !gender || !age)) || (step === 2 && remainingPoints !== 0)}
-                                    className="px-6 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Next <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                                </button>
-                            ) : (
-                                <button
-                                    type="submit"
-                                    className="px-8 py-2 bg-gradient-to-r from-amber-800 to-amber-700 hover:from-amber-700 hover:to-amber-600 text-stone-100 font-display font-bold rounded shadow-lg flex items-center gap-2 transition-all hover:scale-105 animate-pulse-amber"
-                                >
-                                    <BookOpen className="w-4 h-4" aria-hidden="true" /> Begin Adventure
-                                </button>
-                            )}
-                        </div>
-
-                    </form>
+                        {step < 6 ? (
+                            <Button 
+                                onClick={() => setStep(Math.min(6, step + 1))}
+                                disabled={step === 1 && (!name || !gender)}
+                                variant="secondary"
+                                rightIcon={<ChevronRight className="w-4 h-4" />}
+                            >
+                                Next Step
+                            </Button>
+                        ) : (
+                            <Button 
+                                onClick={handleSubmit}
+                                variant="primary"
+                                leftIcon={<Sparkles className="w-4 h-4" />}
+                            >
+                                Begin Adventure
+                            </Button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
+
+const CheckIcon = ({ className }: { className?: string }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+    </svg>
+);
 
 export default CharacterCreator;

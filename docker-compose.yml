@@ -1,3 +1,4 @@
+
 version: '3.8'
 
 services:
@@ -11,8 +12,8 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-    # Uncomment if you need to pass Firebase credentials
-    # volumes:
-    #   - ./firebase-credentials.json:/app/firebase-credentials.json:ro
-    # environment:
-    #   - GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-credentials.json
+      # Authenticate Google Cloud SDK (Secret Manager)
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json
+    volumes:
+      # Mount the local Service Account Key into the container
+      - ./gcp-key.json:/app/gcp-key.json:ro

@@ -1,5 +1,15 @@
+
 import { BaseStats, DerivedStats, ClassDefinition, Skill } from '../types';
 import { CLASS_DEFINITIONS, SKILL_LIST } from '../constants';
+
+// --- Point Buy Logic ---
+export const POINT_BUY_COSTS: Record<number, number> = {
+    8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9
+};
+
+export const calculateStatCost = (score: number): number => {
+    return POINT_BUY_COSTS[score] ?? 0;
+};
 
 // --- Core Math ---
 
@@ -12,15 +22,10 @@ export const calculateMaxHp = (charClass: string, conScore: number, level: numbe
   const hitDie = classDef ? classDef.hitDie : 8;
   const conMod = getModifier(conScore);
   
-  // For Level 1, D&D 5e rule is max hit die + con mod
-  // For subsequent levels, it's usually avg (die/2 + 1) + con mod
-  // For this engine, we will simplify to linear growth based on initial implementation
-  // but centralization allows us to change this logic easily later.
   if (level === 1) {
       return Math.max(1, hitDie + conMod);
   }
   
-  // Example linear scaling for the engine's current logic
   const hpPerLevel = Math.floor(hitDie / 2) + 1 + conMod;
   return Math.max(1, (hitDie + conMod) + (hpPerLevel * (level - 1)));
 };
@@ -40,7 +45,6 @@ export const calculateDerivedStats = (
     const ac = 10 + dexMod; // Base Unarmored AC
     const initiative = dexMod;
     
-    // Spell Save DC calculation
     let spellMod = 0;
     if (['Mage', 'Wizard'].includes(charClass)) spellMod = intMod;
     else if (['Cleric', 'Druid', 'Ranger'].includes(charClass)) spellMod = wisMod;
@@ -50,8 +54,8 @@ export const calculateDerivedStats = (
 
     return {
         ac,
-        attackBonus: strMod + proficiencyBonus, // Default assuming melee str
-        damageDie: '1d8', // Placeholder, overwritten by equipment usually
+        attackBonus: strMod + proficiencyBonus,
+        damageDie: '1d8',
         proficiencyBonus,
         initiative,
         spellSaveDc
@@ -71,7 +75,7 @@ export const generateInitialSkills = (stats: BaseStats, proficiencies: string[],
         else if (['Arcana', 'History', 'Investigation', 'Nature', 'Religion'].includes(skillName)) statMod = intMod;
         else if (['Animal Handling', 'Insight', 'Medicine', 'Perception', 'Survival'].includes(skillName)) statMod = wisMod;
         else if (['Deception', 'Intimidation', 'Performance', 'Persuasion'].includes(skillName)) statMod = chaMod;
-        else statMod = dexMod; // Acrobatics, Sleight of Hand, Stealth
+        else statMod = dexMod;
 
         const isProficient = proficiencies.includes(skillName);
         return {

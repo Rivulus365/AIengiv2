@@ -1,33 +1,85 @@
 
 import React, { useState } from 'react';
-import { Sword, Scroll, Zap, Sparkles, Lock, ArrowRight, Mail, AlertCircle } from 'lucide-react';
+import { Sword, Scroll, Zap, Sparkles, Lock, ArrowRight, Mail, AlertCircle, AlertTriangle, ArrowLeft, Send, User as UserIcon } from 'lucide-react';
 import { authService } from '../services/auth';
+import { isFirebaseConfigured } from '../services/firebase';
+import { useGameStore } from '../store/gameStore';
 import PrivacyPolicyModal from './PrivacyPolicyModal';
+import { NoiseTexture } from './VisualAssets';
+import Button from './design-system/Button';
 
-// A simple Google icon component
+const BANNER_URL = "https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6";
+
+type LogoVariant = 'nav' | 'hero';
+
 const GoogleIcon = () => (
-    <svg className="w-5 h-5" viewBox="0 0 48 48">
-        <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"></path>
-        <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"></path>
-        <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.223 0-9.641-3.657-11.303-8.653l-6.571 4.819C9.656 39.663 16.318 44 24 44z"></path>
-        <path fill="#1976D2" d="M43.611 20.083H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C43.021 36.697 44 34.091 44 31.611c0-3.345-1.045-6.43-2.813-9.006l.202 1.478z"></path>
-    </svg>
+  <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+  </svg>
 );
 
+const FallbackLogo = ({ variant }: { variant: LogoVariant }) => (
+    <div className={`flex items-center gap-3 ${variant === 'hero' ? 'flex-col md:flex-row' : ''} select-none`}>
+        <div className={`relative flex items-center justify-center ${variant === 'hero' ? 'w-20 h-20' : 'w-10 h-10'} bg-gradient-to-br from-amber-900/80 to-stone-900 rounded-lg border border-amber-600/30 shadow-[0_0_15px_rgba(245,158,11,0.15)] overflow-hidden group`}>
+            <div className="absolute inset-0 bg-amber-500/10 rotate-45 transform scale-150 translate-y-full group-hover:translate-y-0 transition-transform duration-700"></div>
+            <Sword className={`${variant === 'hero' ? 'w-10 h-10' : 'w-5 h-5'} text-amber-500 drop-shadow-md`} />
+        </div>
+        <div className={`flex flex-col ${variant === 'hero' ? 'items-center md:items-start text-center md:text-left' : ''}`}>
+            <span className={`${variant === 'hero' ? 'text-3xl' : 'text-xl'} font-display font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-600 tracking-wide leading-none`}>
+                INFINITE
+            </span>
+            <span className={`${variant === 'hero' ? 'text-sm' : 'text-[0.6rem]'} font-serif text-stone-500 uppercase tracking-[0.35em] leading-tight`}>
+                Adventure Engine
+            </span>
+        </div>
+    </div>
+);
+
+const Logo: React.FC<{ className?: string, variant?: LogoVariant }> = ({ className = "", variant = 'nav' }) => {
+    const [error, setError] = useState(false);
+
+    // Use the remote banner URL if available, otherwise rely on fallback
+    const logoSrc = BANNER_URL;
+
+    if (error) {
+        return <FallbackLogo variant={variant as (LogoVariant)} />;
+    }
+
+    return (
+        <img 
+            src={logoSrc} 
+            alt="Infinite Adventure Engine" 
+            className={`${className} object-contain transition-all hover:brightness-110 drop-shadow-[0_0_15px_rgba(245,158,11,0.2)]`}
+            onError={() => setError(true)}
+        />
+    );
+};
+
 const LandingPage: React.FC = () => {
+  const setUser = useGameStore(state => state.setUser);
+  
   const [isLogin, setIsLogin] = useState(true);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
 
-  const handleEmailSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading || googleLoading) return;
+    if (!isFirebaseConfigured) {
+        setError("System Error: Firebase configuration invalid.");
+        return;
+    }
+
     setLoading(true);
     setError(null);
+    setResetSuccess(null);
     
     try {
         if (isLogin) {
@@ -40,7 +92,7 @@ const LandingPage: React.FC = () => {
         }
     } catch (err: any) {
         console.error("Auth error:", err);
-        let msg = "An error occurred.";
+        let msg = "Authentication failed.";
         if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
             msg = "Invalid email or password.";
         } else if (err.code === 'auth/email-already-in-use') {
@@ -54,52 +106,136 @@ const LandingPage: React.FC = () => {
     }
   };
 
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+        setError("Please enter your email address.");
+        return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    setResetSuccess(null);
+
+    try {
+        await authService.resetPassword(email);
+        setResetSuccess("Password reset link sent! Check your inbox.");
+    } catch (err: any) {
+        console.error("Reset error:", err);
+        let msg = "Failed to send reset email.";
+        if (err.code === 'auth/user-not-found') {
+            msg = "No account found with this email.";
+        } else if (err.code === 'auth/invalid-email') {
+            msg = "Invalid email address.";
+        }
+        setError(msg);
+    } finally {
+        setLoading(false);
+    }
+  };
+
   const handleGoogleLogin = async () => {
-    if (loading || googleLoading) return;
-    setGoogleLoading(true);
+    if (!isFirebaseConfigured) {
+        setError("System Error: Firebase API Key missing.");
+        return;
+    }
+
+    setLoading(true);
     setError(null);
     try {
-      await authService.loginWithGoogle();
+        await authService.loginWithGoogle();
+        // Successful login will trigger the onAuthStateChange in App.tsx
     } catch (err: any) {
-      console.error("Google Auth error:", err);
-      let msg = "An error occurred during Google sign-in.";
-      if (err.code === 'auth/popup-closed-by-user') {
-          msg = "Sign-in process was cancelled.";
-      } else if (err.code === 'auth/account-exists-with-different-credential') {
-          msg = "An account already exists with the same email address.";
-      }
-      setError(msg);
+        console.error("Google Auth error:", err);
+        let msg = "Failed to sign in with Google.";
+        if (err.code === 'auth/popup-closed-by-user') {
+            msg = "Sign in cancelled.";
+        } else if (err.code === 'auth/configuration-not-found') {
+            msg = "Google Auth not enabled in project settings.";
+        } else if (err.code === 'auth/invalid-api-key') {
+            msg = "Invalid API Key configuration.";
+        } else if (err.code === 'auth/unauthorized-domain') {
+            msg = `Domain unauthorized (${window.location.hostname}). Add this domain to Firebase Console > Auth > Settings > Authorized Domains.`;
+        } else if (err.message) {
+            msg = err.message;
+        }
+        setError(msg);
     } finally {
-        setGoogleLoading(false);
+        setLoading(false);
     }
-  }
+  };
+
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+        // Attempt robust Firebase Anonymous Auth first
+        if (isFirebaseConfigured) {
+            try {
+                await authService.loginAnonymously();
+                return; // Auth state change will handle the rest
+            } catch (err: any) {
+                console.warn("Firebase Anonymous Auth failed, falling back to local guest.", err);
+                // Fallthrough to local handling if Firebase fails (e.g. not enabled in console)
+            }
+        }
+
+        // Local Guest Fallback (For offline / no-firebase-config scenarios)
+        // We use localStorage to ensure the 'Guest' ID persists across refreshes so they don't lose save data immediately
+        let guestId = localStorage.getItem('ia_guest_id');
+        if (!guestId) {
+            guestId = `guest_${crypto.randomUUID()}`;
+            localStorage.setItem('ia_guest_id', guestId);
+        }
+        
+        await setUser({
+            uid: guestId,
+            email: null,
+            displayName: 'Guest Traveler',
+            photoURL: null,
+            isAnonymous: true
+        });
+        
+    } catch (err: any) {
+        console.error("Guest login critical error:", err);
+        setError("Failed to initialize guest session.");
+    } finally {
+        setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-[100dvh] w-full bg-[#0c0a09] text-stone-300 font-serif relative overflow-hidden flex flex-col">
-      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/foggy-birds.png')] opacity-10 pointer-events-none animate-mist" aria-hidden="true"></div>
+      {/* Background Atmospherics */}
+      <NoiseTexture className="animate-mist text-stone-500" opacity={0.08} />
       <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#0c0a09] to-transparent z-10"></div>
       
+      {/* Navigation */}
       <nav className="relative z-20 px-6 py-6 flex justify-between items-center max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-2">
-            <Sword className="w-6 h-6 text-amber-600" />
-            <span className="font-display font-bold text-xl text-stone-100 tracking-wider">Infinite Adventure Engine</span>
-        </div>
-        <button 
+        <Logo className="h-12 w-auto" variant="nav" />
+        <Button 
+            variant="ghost"
+            size="sm"
             onClick={() => setShowPrivacy(true)}
-            className="text-xs text-stone-500 hover:text-amber-500 uppercase tracking-widest transition-colors"
         >
             Privacy Policy
-        </button>
+        </Button>
       </nav>
 
       <main className="flex-1 flex flex-col lg:flex-row max-w-7xl mx-auto w-full px-6 py-12 gap-16 items-center relative z-20">
         
+        {/* Left Column: Hero Content */}
         <div className="flex-1 space-y-8 animate-in slide-in-from-left duration-700">
             <div className="inline-block bg-amber-900/20 border border-amber-900/40 rounded-full px-4 py-1.5 text-xs text-amber-500 font-display tracking-widest uppercase mb-2">
-                Powered by Gemini 2.5 + IndexedDB
+                Powered by Gemini 2.5
             </div>
             
-            <h1 className="text-5xl md:text-7xl font-display font-bold text-stone-100 leading-[0.9]">
+            {/* Hero Logo Placement */}
+            <div className="w-full max-w-[500px]">
+                <Logo className="w-full h-auto max-h-[180px]" variant="hero" />
+            </div>
+            
+            <h1 className="text-4xl md:text-6xl font-display font-bold text-stone-100 leading-[0.9]">
                 Where Text <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-amber-200 text-shimmer">Becomes Legend</span>
             </h1>
@@ -127,109 +263,188 @@ const LandingPage: React.FC = () => {
             </div>
         </div>
 
+        {/* Right Column: Auth Form */}
         <div className="w-full max-w-md animate-in slide-in-from-right duration-700 delay-200">
             <div className="bg-[#1c1917] border border-[#292524] p-8 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden group">
+                {/* Glow Effect */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.5)] group-hover:w-48 transition-all duration-700"></div>
 
                 <div className="text-center mb-6">
                     <h2 className="text-2xl font-display font-bold text-stone-100">
-                        {isLogin ? 'Welcome Back' : 'Create Account'}
+                        {isForgotPassword 
+                            ? 'Account Recovery' 
+                            : (isLogin ? 'Welcome Back' : 'Create Account')}
                     </h2>
                     <p className="text-stone-500 text-sm mt-2">
-                        {isLogin ? 'Enter the realm and resume your journey.' : 'Begin your legend today.'}
+                        {isForgotPassword 
+                            ? 'Recover access to your adventure.' 
+                            : (isLogin ? 'Enter the realm and resume your journey.' : 'Begin your legend today.')}
                     </p>
                 </div>
 
+                {!isFirebaseConfigured && (
+                    <div className="mb-4 p-3 bg-red-950/50 border border-red-900 rounded flex items-start gap-2 text-red-200 text-xs">
+                        <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
+                        <p>Missing valid Firebase Configuration. The provided API key may be incorrect or missing.</p>
+                    </div>
+                )}
+
                 {error && (
-                    <div className="mb-4 p-3 bg-red-950/30 border border-red-900/50 rounded flex items-start gap-2 text-red-400 text-xs">
-                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div className="mb-4 p-3 bg-red-950/30 border border-red-900/50 rounded flex items-start gap-2 text-red-400 text-xs animate-in slide-in-from-top-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
                         <p>{error}</p>
                     </div>
                 )}
 
-                <form onSubmit={handleEmailSubmit} className="space-y-4">
-                    <div className="space-y-1">
-                        <label className="text-xs text-stone-500 uppercase tracking-widest font-bold ml-1">Email</label>
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-3 w-5 h-5 text-stone-600" />
-                            <input 
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 p-3 pl-10 rounded focus:outline-none focus:border-amber-700/50 transition-colors"
-                                placeholder="hero@realm.com"
-                                required
-                            />
-                        </div>
+                {resetSuccess && (
+                    <div className="mb-4 p-3 bg-emerald-950/30 border border-emerald-900/50 rounded flex items-start gap-2 text-emerald-400 text-xs animate-in slide-in-from-top-2">
+                        <Sparkles className="w-4 h-4 shrink-0" />
+                        <p>{resetSuccess}</p>
                     </div>
+                )}
 
-                    <div className="space-y-1">
-                        <label className="text-xs text-stone-500 uppercase tracking-widest font-bold ml-1">Password</label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-3 w-5 h-5 text-stone-600" />
-                            <input 
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 p-3 pl-10 rounded focus:outline-none focus:border-amber-700/50 transition-colors"
-                                placeholder="••••••••"
-                                required
-                            />
+                {/* FORGOT PASSWORD FORM */}
+                {isForgotPassword ? (
+                    <form onSubmit={handlePasswordReset} className="space-y-4 animate-in fade-in slide-in-from-right duration-300">
+                        <div className="space-y-1">
+                            <label className="text-xs text-stone-500 uppercase tracking-widest font-bold ml-1">Email Address</label>
+                            <div className="relative">
+                                <Mail className="absolute left-3 top-3 w-5 h-5 text-stone-600" />
+                                <input 
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 p-3 pl-10 rounded focus:outline-none focus:border-amber-700/50 transition-colors"
+                                    placeholder="hero@realm.com"
+                                    required
+                                    autoFocus
+                                />
+                            </div>
                         </div>
-                    </div>
 
-                    <button 
-                        type="submit"
-                        disabled={loading || googleLoading}
-                        className="w-full bg-gradient-to-r from-amber-800 to-amber-700 hover:from-amber-700 hover:to-amber-600 text-stone-100 font-display font-bold py-3 rounded shadow-lg mt-6 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {loading ? (
-                            <span className="animate-pulse">Authenticating...</span>
-                        ) : (
-                            <>
-                                {isLogin ? 'Login' : 'Sign Up'} <ArrowRight className="w-4 h-4" />
-                            </>
-                        )}
-                    </button>
-                </form>
-                
-                <div className="relative flex py-5 items-center">
-                    <div className="flex-grow border-t border-stone-700/50"></div>
-                    <span className="flex-shrink mx-4 text-stone-500 text-xs">OR</span>
-                    <div className="flex-grow border-t border-stone-700/50"></div>
-                </div>
+                        <Button 
+                            type="submit"
+                            variant="primary"
+                            isLoading={loading}
+                            disabled={!isFirebaseConfigured}
+                            className="w-full"
+                            rightIcon={<Send className="w-4 h-4" />}
+                        >
+                            Send Reset Link
+                        </Button>
 
-                <button 
-                    type="button"
-                    onClick={handleGoogleLogin}
-                    disabled={loading || googleLoading}
-                    className="w-full bg-[#1c1917] border border-[#292524] hover:bg-[#292524] text-stone-200 font-display font-bold py-3 rounded shadow-lg flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                    {googleLoading ? (
-                        <span className="animate-pulse">Redirecting...</span>
-                    ) : (
-                        <>
-                           <GoogleIcon /> Sign In with Google
-                        </>
-                    )}
-                </button>
+                        <button 
+                            type="button"
+                            onClick={() => { setIsForgotPassword(false); setError(null); setResetSuccess(null); }}
+                            className="w-full text-xs text-stone-500 hover:text-stone-300 py-2 flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <ArrowLeft className="w-3 h-3" /> Back to Login
+                        </button>
+                    </form>
+                ) : (
+                    /* LOGIN / SIGNUP FORM */
+                    <>
+                        {/* Google Sign In */}
+                        <button
+                            onClick={handleGoogleLogin}
+                            disabled={loading || !isFirebaseConfigured}
+                            className="w-full bg-white hover:bg-stone-100 text-stone-900 py-3 rounded border border-stone-300 transition-all flex items-center justify-center gap-3 mb-3 group shadow-md disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg font-sans"
+                        >
+                            {loading && error === null ? <div className="w-5 h-5 border-2 border-stone-400 border-t-stone-800 rounded-full animate-spin"></div> : <GoogleIcon />}
+                            <span className="text-sm font-bold">Sign in with Google</span>
+                        </button>
 
-                <div className="mt-6 text-center">
-                    <button 
-                        type="button"
-                        onClick={() => { setError(null); setIsLogin(!isLogin); }}
-                        className="text-xs text-stone-500 hover:text-amber-500 transition-colors underline decoration-stone-700 hover:decoration-amber-500"
-                    >
-                        {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Login"}
-                    </button>
-                </div>
+                        {/* Guest Mode */}
+                        <button
+                            onClick={handleGuestLogin}
+                            disabled={loading}
+                            className="w-full bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-stone-200 py-3 rounded border border-stone-800 hover:border-stone-600 transition-all flex items-center justify-center gap-3 mb-4 group disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <UserIcon className="w-4 h-4 group-hover:text-stone-100 transition-colors" />
+                            <span className="text-xs font-bold uppercase tracking-wide">Continue as Guest</span>
+                        </button>
+
+                        <div className="relative mb-4">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-[#292524]"></div>
+                            </div>
+                            <div className="relative flex justify-center text-xs">
+                                <span className="px-2 bg-[#1c1917] text-stone-500 uppercase tracking-widest">Or continue with email</span>
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4 animate-in fade-in duration-300">
+                            <div className="space-y-1">
+                                <label className="text-xs text-stone-500 uppercase tracking-widest font-bold ml-1">Email</label>
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-3 w-5 h-5 text-stone-600" />
+                                    <input 
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 p-3 pl-10 rounded focus:outline-none focus:border-amber-700/50 transition-colors"
+                                        placeholder="hero@realm.com"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <div className="flex justify-between items-baseline">
+                                    <label className="text-xs text-stone-500 uppercase tracking-widest font-bold ml-1">Password</label>
+                                    {isLogin && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setIsForgotPassword(true); setError(null); setResetSuccess(null); }}
+                                            className="text-[10px] text-amber-600 hover:text-amber-400 transition-colors"
+                                        >
+                                            Forgot Password?
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <Lock className="absolute left-3 top-3 w-5 h-5 text-stone-600" />
+                                    <input 
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 p-3 pl-10 rounded focus:outline-none focus:border-amber-700/50 transition-colors"
+                                        placeholder="••••••••"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <Button 
+                                type="submit"
+                                variant="primary"
+                                isLoading={loading && !error && error !== null}
+                                disabled={!isFirebaseConfigured}
+                                className="w-full mt-6"
+                                rightIcon={<ArrowRight className="w-4 h-4" />}
+                            >
+                                {isLogin ? 'Login' : 'Sign Up'}
+                            </Button>
+                        </form>
+
+                        <div className="mt-6 text-center">
+                            <button 
+                                type="button"
+                                onClick={() => { setError(null); setIsLogin(!isLogin); setResetSuccess(null); }}
+                                className="text-xs text-stone-500 hover:text-amber-500 transition-colors underline decoration-stone-700 hover:decoration-amber-500"
+                            >
+                                {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Login"}
+                            </button>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
       </main>
 
       <footer className="relative z-20 border-t border-[#292524] p-6 text-center">
         <p className="text-[10px] text-stone-600 uppercase tracking-widest">
-            © 2023 Infinite Adventure Engine • Powered by Browser Storage & Gemini
+            © 2023 Infinite Adventure Engine • Powered by Gemini
         </p>
       </footer>
 

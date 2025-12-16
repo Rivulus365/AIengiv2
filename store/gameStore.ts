@@ -1,333 +1,454 @@
 
 import { create } from 'zustand';
-import { GameState, ChatMessage, ImageSize, BaseStats, Feat, MessageRole } from '../types';
-import { INITIAL_GAME_STATE, GAME_CONFIG } from '../constants';
-import { generateAdventureResponse, generateSceneImage, summarizeHistory } from '../services/gemini';
-import { extractGameState } from '../utils/parser';
-import { validateGameState, repairGameState, normalizeGameState } from '../utils/validator';
-import { calculateDerivedStats, calculateMaxHp, generateInitialSkills } from '../utils/engine';
+import { 
+    GameState, 
+    ChatMessage, 
+    ImageSize, 
+    FontSize, 
+    BaseStats, 
+    ToastMessage,
+    CharacterCreationData
+} from '../types';
+import { User } from '../services/auth';
+import { 
+    INITIAL_GAME_STATE, 
+    GAME_CONFIG,
+    DEFAULT_IMAGE_SIZE
+} from '../constants';
+import { 
+    generateAdventureResponse, 
+    generateSceneImage,
+    generateNarration
+} from '../services/gemini';
+import { liveService } from '../services/live';
+import { audioService } from '../services/audio';
+import { 
+    calculateDerivedStats, 
+    calculateMaxHp, 
+    generateInitialSkills 
+} from '../utils/engine';
 import { GameDataService } from '../services/gameData';
 import { saveGame, loadGame, clearSave } from '../services/storage';
-import { User } from '../services/auth';
+import { extractGameState } from '../utils/parser';
+import { repairGameState } from '../utils/validator';
 
-interface GameStoreState {
-  // State
-  user: User | null;
-  gameState: GameState;
-  messages: ChatMessage[];
-  isCharacterCreated: boolean;
-  isLoading: boolean;
-  isGameLoaded: boolean;
-  imageSize: ImageSize;
-  imageGenEnabled: boolean;
-  soundEnabled: boolean;
-  textSpeed: 'normal' | 'fast' | 'instant';
+// --- HELPER FUNCTIONS ---
 
-  // Actions
-  setUser: (user: User | null) => Promise<void>;
-  processTurn: (userInput: string) => Promise<void>;
-  createCharacter: (name: string, gender: string, age: number, race: string, charClass: string, stats: BaseStats, feat: Feat, subclass?: string) => Promise<void>;
-  respawn: () => Promise<void>;
-  levelUp: (newStats: BaseStats) => void;
-  resetCampaign: () => Promise<void>;
-  manualSave: () => Promise<void>;
-  
-  // Settings Actions
-  setImageSize: (size: ImageSize) => void;
-  setImageGenEnabled: (enabled: boolean) => void;
-  setSoundEnabled: (enabled: boolean) => void;
-  setTextSpeed: (speed: 'normal' | 'fast' | 'instant') => void;
-  addMessage: (role: MessageRole, text: string, image?: string) => void;
-}
-
-// Helper to prepare history context
-const prepareHistoryForContext = async (
-    currentHistory: ChatMessage[],
-    limit: number = GAME_CONFIG.HISTORY_LIMIT
-): Promise<{ role: "user" | "model"; parts: { text: string }[] }[]> => {
-    // Filter out system messages that shouldn't be part of the narrative context if necessary
-    // For now, we treat them as user messages to drive the logic
-    let historyForApi: { role: "user" | "model"; parts: { text: string }[] }[] = currentHistory.map(m => ({
-        role: (m.role === 'system' ? 'user' : m.role) as "user" | "model",
-        parts: [{ text: m.text }]
-    }));
-
-    if (historyForApi.length <= limit) return historyForApi;
-
-    try {
-        const startKeep = GAME_CONFIG.SUMMARY_START_KEEP;
-        const endKeep = GAME_CONFIG.SUMMARY_END_KEEP;
-        
-        if (historyForApi.length > (startKeep + endKeep + GAME_CONFIG.SUMMARY_THRESHOLD)) {
-            const chunkToSummarize = historyForApi.slice(startKeep, historyForApi.length - endKeep);
-            const summary = await summarizeHistory(chunkToSummarize);
-            const summaryMessage: { role: "user" | "model"; parts: { text: string }[] } = {
-                role: 'user',
-                parts: [{ text: `[Previous Story Summary]: ${summary}` }]
-            };
-            return [
-                ...historyForApi.slice(0, startKeep),
-                summaryMessage,
-                ...historyForApi.slice(historyForApi.length - endKeep)
-            ];
-        }
-    } catch (e) {
-        console.warn("Summarization failed, falling back to full history", e);
-    }
-
-    return historyForApi;
+const buildStartPrompt = (data: CharacterCreationData): string => {
+    const { name, age, gender, race, charClass, subclass, background, stats, feat } = data;
+    const subclassText = subclass ? ` I specialize as a ${subclass}.` : '';
+    const bgText = background ? ` My background is ${background}.` : '';
+    return `I am ${name}, a ${age}-year-old ${gender} ${race} ${charClass} (Level 1).${subclassText}${bgText} My stats are STR:${stats.str} DEX:${stats.dex} CON:${stats.con} INT:${stats.int} WIS:${stats.wis} CHA:${stats.cha}. I have the feat ${feat.name}. Generate my starting inventory and drop me into the world.`;
 };
 
+const handleImageGeneration = async (
+    text: string, 
+    newState: GameState, 
+    oldState: GameState, 
+    msgId: string, 
+    size: ImageSize
+): Promise<string | null> => {
+    const locationChanged = newState.worldState.location !== oldState.worldState.location;
+    const combatChanged = newState.combat.isActive !== oldState.combat.isActive;
+    // We only generate if scene context shifted
+    if (locationChanged || combatChanged) {
+        const sceneDesc = text.slice(0, 300);
+        const characterDesc = `${newState.player.race} ${newState.player.class}, ${newState.player.gender}`;
+        const envDesc = newState.worldState.location;
+        return await generateSceneImage(sceneDesc, characterDesc, envDesc, size);
+    }
+    return null;
+};
+
+// --- STORE INTERFACE ---
+
+interface GameStoreState {
+    user: User | null;
+    isGameLoaded: boolean;
+    isLoading: boolean;
+    isCharacterCreated: boolean;
+    isLiveActive: boolean;
+    isMicMuted: boolean; // New state for mic mute
+    gameState: GameState;
+    messages: ChatMessage[];
+    
+    // Settings
+    soundEnabled: boolean;
+    narratorEnabled: boolean;
+    imageGenEnabled: boolean;
+    imageSize: ImageSize;
+    fontSize: FontSize;
+    textSpeed: 'normal' | 'fast' | 'instant';
+    
+    toasts: ToastMessage[];
+
+    // Actions
+    setUser: (user: User | null) => Promise<void>;
+    setSoundEnabled: (enabled: boolean) => void;
+    setNarratorEnabled: (enabled: boolean) => void;
+    setImageGenEnabled: (enabled: boolean) => void;
+    setImageSize: (size: ImageSize) => void;
+    setFontSize: (size: FontSize) => void;
+    setTextSpeed: (speed: 'normal' | 'fast' | 'instant') => void;
+    
+    createCharacter: (data: CharacterCreationData) => Promise<void>;
+    processTurn: (input: string) => Promise<void>;
+    toggleLiveMode: () => Promise<void>; 
+    toggleMicMute: () => void; // New action
+    
+    manualSave: () => Promise<void>;
+    resetCampaign: () => void;
+    respawn: () => void;
+    levelUp: (stats: BaseStats) => Promise<void>;
+    
+    addToast: (title: string, message?: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
+    removeToast: (id: string) => void;
+}
+
 export const useGameStore = create<GameStoreState>((set, get) => ({
-  // Initial State
-  user: null,
-  gameState: INITIAL_GAME_STATE,
-  messages: [],
-  isCharacterCreated: false,
-  isLoading: false,
-  isGameLoaded: false,
-  imageSize: ImageSize.Size_1K,
-  imageGenEnabled: true,
-  soundEnabled: true,
-  textSpeed: 'normal',
-
-  // Actions
-  setUser: async (user) => {
-    set({ user, isGameLoaded: false, isLoading: true });
+    user: null,
+    isGameLoaded: false,
+    isLoading: false,
+    isCharacterCreated: false,
+    isLiveActive: false,
+    isMicMuted: false, // Default unmuted
+    gameState: INITIAL_GAME_STATE,
+    messages: [],
     
-    if (user) {
-      try {
-        const savedData = await loadGame(user.uid);
-        if (savedData) {
-          // Normalize the saved state to fix any existing corruptions from previous versions
-          const normalizedState = normalizeGameState(savedData.gameState);
-          
-          if (validateGameState(normalizedState)) {
-            set({
-              gameState: normalizedState,
-              messages: savedData.messages,
-              isCharacterCreated: !!normalizedState.player.name,
-              isGameLoaded: true,
-              isLoading: false
-            });
-            return;
-          } else {
-            console.warn("Saved game state invalid, resetting...");
-          }
-        }
-      } catch (e) {
-        console.error("Error loading game:", e);
-      }
-      
-      // No save found or invalid
-      set({
-        gameState: INITIAL_GAME_STATE,
-        messages: [],
-        isCharacterCreated: false,
-        isGameLoaded: true,
-        isLoading: false
-      });
-    } else {
-      set({
-        gameState: INITIAL_GAME_STATE,
-        messages: [],
-        isCharacterCreated: false,
-        isGameLoaded: false,
-        isLoading: false
-      });
-    }
-  },
-
-  addMessage: (role, text, image) => {
-    set(state => ({
-      messages: [...state.messages, { id: crypto.randomUUID(), role, text, image }]
-    }));
-  },
-
-  createCharacter: async (name, gender, age, race, charClass, stats, feat, subclass) => {
-    const level = 1;
-    const proficiencyBonus = 2;
-    const derivedStats = calculateDerivedStats(stats, charClass, level, proficiencyBonus);
-
-    const classDefinitions = await GameDataService.getClasses();
-    const classDef = classDefinitions[charClass];
-
-    const resources = classDef?.resources || {
-        spellSlots: { current: 0, max: 0 },
-        classFeats: { name: "Feature", current: 0, max: 0 }
-    };
-
-    const maxHp = calculateMaxHp(charClass, stats.con, level);
-    const initialProficiencies: string[] = ["Simple Weapons"];
-    const initialSkills = generateInitialSkills(stats, initialProficiencies, proficiencyBonus);
-
-    const baseFeatures = classDef?.features || [];
-    const subclassFeatures = (subclass && classDef?.subclasses?.[subclass]?.features) || [];
-    const allFeatures = [...baseFeatures, ...subclassFeatures];
-
-    const newGameState: GameState = {
-        ...INITIAL_GAME_STATE,
-        player: {
-            ...INITIAL_GAME_STATE.player,
-            name,
-            gender,
-            age,
-            race,
-            class: charClass,
-            subclass: subclass || '',
-            level,
-            hp: { current: maxHp, max: maxHp },
-            stats: stats,
-            derivedStats: derivedStats,
-            resources,
-            skills: initialSkills,
-            proficiencies: initialProficiencies,
-            activeFeats: [feat.name],
-            activeSpells: [],
-            features: allFeatures
-        }
-    };
-
-    const subclassText = subclass ? ` I specialize as a ${subclass}.` : '';
-    const startPrompt = `I am ${name}, a ${age}-year-old ${gender} ${race} ${charClass} (Level 1).${subclassText} My stats are STR:${stats.str} DEX:${stats.dex} CON:${stats.con} INT:${stats.int} WIS:${stats.wis} CHA:${stats.cha}. I have the feat ${feat.name}. Generate my starting inventory and drop me into the world.`;
+    soundEnabled: true,
+    narratorEnabled: true,
+    imageGenEnabled: true,
+    imageSize: DEFAULT_IMAGE_SIZE,
+    fontSize: 'medium',
+    textSpeed: 'normal',
     
-    // Reset messages for new game
-    set({
-        gameState: newGameState,
-        isCharacterCreated: true,
-        messages: [{ id: crypto.randomUUID(), role: 'user', text: startPrompt }]
-    });
+    toasts: [],
 
-    // Trigger initial turn
-    await get().processTurn(startPrompt);
-  },
-
-  processTurn: async (userInput) => {
-    const state = get();
-    
-    // Optimistic message update
-    const lastMsg = state.messages[state.messages.length - 1];
-    if (lastMsg?.text !== userInput) {
-        const role = userInput.startsWith('[System]:') ? 'system' : 'user';
-        set(state => ({
-            messages: [...state.messages, { id: crypto.randomUUID(), role: role as MessageRole, text: userInput }]
-        }));
-    }
-
-    set({ isLoading: true });
-
-    try {
-        const currentGameState = get().gameState;
-        const currentHistory = get().messages;
-        
-        const historyForApi = await prepareHistoryForContext(currentHistory);
-        const rawResponse = await generateAdventureResponse(historyForApi, userInput, currentGameState);
-        
-        // Extract and validate
-        const { cleanedText, gameState: rawNewState } = extractGameState(rawResponse);
-
-        let newState = rawNewState;
-        if (newState) {
-            // CRITICAL: Normalize data types before use. AI can sometimes return objects in string[] arrays.
-            newState = normalizeGameState(newState);
-
-            if (!validateGameState(newState)) {
-                console.warn("Invalid State returned from AI. Attempting repair.");
-                newState = repairGameState(newState, currentGameState);
-            }
-            set({ gameState: newState });
-        }
-
-        const messageId = crypto.randomUUID();
-        set(state => ({
-            isLoading: false,
-            messages: [...state.messages, { id: messageId, role: 'model', text: cleanedText }]
-        }));
-
-        // Image Generation
-        if (get().imageGenEnabled) {
-            const cleanText = cleanedText
-                .replace(/\(Rolled .*?\)/gi, '')
-                .replace(/Rolled \d+/gi, '')
-                .replace(/\[.*?\]/g, '')
-                .trim();
-
-            const visualDescription = cleanText.slice(0, 300);
-            const player = get().gameState.player;
-            const equipmentVisuals = get().gameState.equipment.mainHand?.name ? `wielding ${get().gameState.equipment.mainHand?.name}` : '';
-            const characterVisuals = `${player.age} year old ${player.gender} ${player.race} ${player.class}, ${equipmentVisuals}`;
-
-            generateSceneImage(visualDescription, characterVisuals, get().imageSize).then(imageUrl => {
-                if (imageUrl) {
-                    set(state => ({
-                        messages: state.messages.map(msg => 
-                            msg.id === messageId ? { ...msg, image: imageUrl } : msg
-                        )
-                    }));
-                }
-            });
-        }
-
-        // Auto Save
-        const user = get().user;
+    setUser: async (user) => {
+        set({ user });
         if (user) {
-            saveGame(user.uid, get().gameState, get().messages);
+            const savedData = await loadGame(user.uid);
+            if (savedData) {
+                set({
+                    gameState: savedData.gameState,
+                    messages: savedData.messages,
+                    isCharacterCreated: true, 
+                    isGameLoaded: true
+                });
+            } else {
+                set({ isGameLoaded: true, isCharacterCreated: false });
+            }
+        } else {
+            set({ 
+                gameState: INITIAL_GAME_STATE, 
+                messages: [], 
+                isCharacterCreated: false, 
+                isGameLoaded: false 
+            });
+        }
+    },
+
+    setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
+    setNarratorEnabled: (enabled) => set({ narratorEnabled: enabled }),
+    setImageGenEnabled: (enabled) => set({ imageGenEnabled: enabled }),
+    setImageSize: (size) => set({ imageSize: size }),
+    setFontSize: (size) => set({ fontSize: size }),
+    setTextSpeed: (speed) => set({ textSpeed: speed }),
+
+    addToast: (title, message, type = 'info') => {
+        const id = crypto.randomUUID();
+        set(state => ({
+            toasts: [...state.toasts, { id, title, message, type }]
+        }));
+        setTimeout(() => get().removeToast(id), 5000);
+    },
+
+    removeToast: (id) => {
+        set(state => ({
+            toasts: state.toasts.filter(t => t.id !== id)
+        }));
+    },
+
+    createCharacter: async (data) => {
+        const { charClass, stats, feat, subclass, background } = data;
+        const level = 1;
+        const proficiencyBonus = 2;
+        const derivedStats = calculateDerivedStats(stats, charClass, level, proficiencyBonus);
+        
+        const classDefinitions = await GameDataService.getClasses();
+        const classDef = classDefinitions[charClass];
+        const backgroundDefinitions = await GameDataService.getBackgrounds();
+        const bgDef = backgroundDefinitions[background];
+
+        const resources = classDef?.resources || {
+            spellSlots: { current: 0, max: 0 },
+            classFeats: { name: "Feature", current: 0, max: 0 }
+        };
+
+        const maxHp = calculateMaxHp(charClass, stats.con, level);
+        
+        const initialProficiencies: string[] = ["Simple Weapons"];
+        if (bgDef?.skillProficiencies) initialProficiencies.push(...bgDef.skillProficiencies);
+
+        const initialSkills = generateInitialSkills(stats, initialProficiencies, proficiencyBonus);
+
+        const baseFeatures = classDef?.features || [];
+        const subclassFeatures = (subclass && classDef?.subclasses?.[subclass]?.features) || [];
+        const bgFeature = bgDef?.feature ? [bgDef.feature.name] : [];
+        
+        const newGameState: GameState = {
+            ...INITIAL_GAME_STATE,
+            player: {
+                ...INITIAL_GAME_STATE.player,
+                name: data.name,
+                gender: data.gender,
+                age: data.age,
+                race: data.race,
+                class: charClass,
+                subclass: subclass || '',
+                level,
+                hp: { current: maxHp, max: maxHp },
+                stats,
+                derivedStats,
+                resources,
+                skills: initialSkills,
+                proficiencies: initialProficiencies,
+                activeFeats: [feat.name],
+                activeSpells: [],
+                features: [...baseFeatures, ...subclassFeatures, ...bgFeature],
+                xp: 0,
+                nextLevelXp: 300,
+                gold: 50
+            }
+        };
+
+        const startPrompt = buildStartPrompt(data);
+        
+        set({
+            gameState: newGameState,
+            isCharacterCreated: true,
+            messages: [{ id: crypto.randomUUID(), role: 'user', text: startPrompt }]
+        });
+
+        await get().processTurn(startPrompt);
+    },
+
+    processTurn: async (input) => {
+        const state = get();
+        const { user, messages, gameState, imageGenEnabled, imageSize, narratorEnabled } = state;
+        if (!user) return;
+
+        set({ isLoading: true });
+
+        // Optimistic UI Update
+        const lastMsg = messages[messages.length - 1];
+        let currentMessages = [...messages];
+        if (!lastMsg || lastMsg.text !== input || lastMsg.role !== 'user') {
+            currentMessages.push({ id: crypto.randomUUID(), role: 'user', text: input });
+            set({ messages: currentMessages });
         }
 
-    } catch (error) {
-        console.error("Turn processing failed:", error);
-        set({ isLoading: false });
-        get().addMessage('model', "The world flickers... something went wrong. Try again.");
-    }
-  },
+        try {
+            // Context Management
+            const historyLimit = GAME_CONFIG.HISTORY_LIMIT || 10;
+            const contextMessages = currentMessages.slice(-historyLimit).map(m => ({
+                role: m.role,
+                parts: [{ text: m.text }]
+            }));
 
-  respawn: async () => {
-    const state = get();
-    const maxHp = state.gameState.player.hp.max;
-    const revivedHp = Math.floor(maxHp / 2);
-    
-    // Reset HP in local state immediately
-    const revivedState = {
-        ...state.gameState,
-        player: { 
-            ...state.gameState.player, 
-            hp: { ...state.gameState.player.hp, current: revivedHp } 
+            // Gemini Interaction
+            const rawResponse = await generateAdventureResponse(contextMessages, input, gameState);
+            const { cleanedText, gameState: parsedState } = extractGameState(rawResponse);
+            
+            // State Reconciliation
+            let finalState = gameState;
+            if (parsedState) {
+                try {
+                    finalState = repairGameState(parsedState, gameState);
+                } catch (e) {
+                    console.warn("State repair fallback used", e);
+                }
+            }
+
+            const modelMsgId = crypto.randomUUID();
+            let modelMessage: ChatMessage = {
+                id: modelMsgId,
+                role: 'model',
+                text: cleanedText,
+                gameStateSnapshot: finalState,
+                isImageLoading: imageGenEnabled // Optimistically show loading
+            };
+
+            // Intermediate Update
+            set({ 
+                gameState: finalState, 
+                messages: [...currentMessages, modelMessage] 
+            });
+
+            // Audio Narration Side-Effect
+            if (narratorEnabled && cleanedText) {
+                // We don't await this, it plays when ready
+                generateNarration(cleanedText).then(audioData => {
+                    if (audioData) {
+                        audioService.playPCM(audioData);
+                    }
+                });
+            }
+
+            // Async Image Generation Side-Effect
+            if (imageGenEnabled) {
+                // Determine if we actually need an image
+                const shouldGenerate = (finalState.worldState.location !== gameState.worldState.location) 
+                                    || (finalState.combat.isActive !== gameState.combat.isActive)
+                                    || (messages.length <= 1);
+
+                if (shouldGenerate) {
+                    handleImageGeneration(cleanedText, finalState, gameState, modelMsgId, imageSize)
+                        .then(url => {
+                            set(s => ({
+                                messages: s.messages.map(m => 
+                                    m.id === modelMsgId ? { ...m, image: url || undefined, isImageLoading: false } : m
+                                ),
+                                isLoading: false
+                            }));
+                            // Save after image is ready (or failed)
+                            if (user) saveGame(user.uid, finalState, get().messages);
+                        });
+                } else {
+                    set(s => ({
+                        messages: s.messages.map(m => m.id === modelMsgId ? { ...m, isImageLoading: false } : m),
+                        isLoading: false
+                    }));
+                    if (user) await saveGame(user.uid, finalState, [...currentMessages, { ...modelMessage, isImageLoading: false }]);
+                }
+            } else {
+                set({ isLoading: false });
+                if (user) await saveGame(user.uid, finalState, [...currentMessages, { ...modelMessage, isImageLoading: false }]);
+            }
+
+        } catch (error) {
+            console.error("Turn Processing Error:", error);
+            get().addToast("Error", "The fates are silent. Try again.", "error");
+            set({ isLoading: false });
         }
-    };
-    
-    set({ gameState: revivedState });
-    
-    const prompt = "[System]: The player has died. They respawn at the nearest safe location (Town or Camp) with 50% HP. Describe their awakening and the penalty.";
-    await get().processTurn(prompt);
-  },
+    },
 
-  levelUp: (newStats) => {
-    set(state => ({
-        gameState: {
-            ...state.gameState,
-            player: { ...state.gameState.player, stats: newStats, unspentStatPoints: 0 }
+    toggleLiveMode: async () => {
+        const { isLiveActive } = get();
+        
+        if (isLiveActive) {
+            // Disconnect
+            liveService.disconnect();
+            set({ isLiveActive: false, isMicMuted: false });
+            get().addToast("Voice Mode Ended", "Returned to text adventure.", "info");
+        } else {
+            // Connect
+            try {
+                // Setup callbacks before connecting
+                liveService.onStatusChange = (isActive) => set({ isLiveActive: isActive });
+                liveService.onMessage = (text) => {
+                    // Transcript handling logic could go here
+                };
+
+                // Ensure we start unmuted
+                set({ isMicMuted: false });
+                liveService.setMuted(false);
+
+                await liveService.connect();
+                // State is updated by onStatusChange callback
+                get().addToast("Voice Mode Active", "Speak to the Dungeon Master.", "success");
+            } catch (e) {
+                get().addToast("Connection Failed", "Could not start voice mode.", "error");
+            }
         }
-    }));
-  },
+    },
 
-  resetCampaign: async () => {
-    const user = get().user;
-    if (user) {
-        await clearSave(user.uid);
-        window.location.reload();
+    toggleMicMute: () => {
+        const { isMicMuted } = get();
+        const newMuted = !isMicMuted;
+        liveService.setMuted(newMuted);
+        set({ isMicMuted: newMuted });
+    },
+
+    manualSave: async () => {
+        const { user, gameState, messages } = get();
+        if (user) {
+            await saveGame(user.uid, gameState, messages);
+            get().addToast("Game Saved", "Your progress has been recorded.", "success");
+        }
+    },
+
+    resetCampaign: () => {
+        const { user } = get();
+        if (user) {
+            clearSave(user.uid);
+            set({
+                gameState: INITIAL_GAME_STATE,
+                messages: [],
+                isCharacterCreated: false,
+                isGameLoaded: true 
+            });
+            get().addToast("Campaign Reset", "The world has been wiped clean.", "warning");
+        }
+    },
+
+    respawn: () => {
+        const { gameState, user, messages } = get();
+        const maxHp = gameState.player.hp.max;
+        const newHp = Math.floor(maxHp / 2);
+        
+        const newState = {
+            ...gameState,
+            player: {
+                ...gameState.player,
+                hp: { ...gameState.player.hp, current: newHp }
+            }
+        };
+
+        const respawnMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'model',
+            text: "You gasp for air, awakening with a jolt. Death has rejected you... for now. You feel weak, but alive."
+        };
+
+        set({ gameState: newState, messages: [...messages, respawnMsg] });
+        if (user) saveGame(user.uid, newState, [...messages, respawnMsg]);
+    },
+
+    levelUp: async (newStats) => {
+        const { gameState, user, messages } = get();
+        const oldLevel = gameState.player.level;
+        const newLevel = oldLevel + 1;
+        
+        const conMod = Math.floor((newStats.con - 10) / 2);
+        const classDef = await GameDataService.getClasses().then(c => c[gameState.player.class]);
+        const hitDie = classDef?.hitDie || 8;
+        const hpIncrease = Math.floor(hitDie / 2) + 1 + conMod;
+        const newMaxHp = gameState.player.hp.max + hpIncrease;
+        
+        const newState = {
+            ...gameState,
+            player: {
+                ...gameState.player,
+                level: newLevel,
+                stats: newStats,
+                hp: { current: newMaxHp, max: newMaxHp },
+                unspentStatPoints: 0,
+                resources: {
+                     ...gameState.player.resources,
+                     spellSlots: { ...gameState.player.resources.spellSlots, current: gameState.player.resources.spellSlots.max } 
+                }
+            }
+        };
+
+        const levelUpMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'system', 
+            text: `[System]: Level Up! You are now Level ${newLevel}. Max HP increased by ${hpIncrease}. Stats updated.`
+        };
+
+        set({ gameState: newState, messages: [...messages, levelUpMsg] });
+        if (user) saveGame(user.uid, newState, [...messages, levelUpMsg]);
+        get().addToast("Level Up!", `Welcome to level ${newLevel}.`, "success");
     }
-  },
-
-  manualSave: async () => {
-    const user = get().user;
-    if (user) {
-        await saveGame(user.uid, get().gameState, get().messages);
-    }
-  },
-
-  setImageSize: (size) => set({ imageSize: size }),
-  setImageGenEnabled: (enabled) => set({ imageGenEnabled: enabled }),
-  setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
-  setTextSpeed: (speed) => set({ textSpeed: speed }),
-
 }));

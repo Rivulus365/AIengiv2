@@ -1,68 +1,128 @@
 
-import { auth } from './firebase';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut, 
-  onAuthStateChanged, 
-  User as FirebaseUser,
-  updateProfile,
+  onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  sendPasswordResetEmail,
+  signInAnonymously,
+  type User as FirebaseUser,
+  type AuthError
 } from 'firebase/auth';
+import { auth } from './firebase';
 
 export interface User {
   uid: string;
   email: string | null;
   displayName: string | null;
+  photoURL?: string | null;
+  isAnonymous?: boolean;
 }
 
-// Convert Firebase User to our User interface
-const mapUser = (user: FirebaseUser | null): User | null => {
-  if (!user) return null;
+// Map Firebase user to our internal User interface
+const mapUser = (firebaseUser: FirebaseUser | null): User | null => {
+  if (!firebaseUser) return null;
   return {
-    uid: user.uid,
-    email: user.email,
-    displayName: user.displayName
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    displayName: firebaseUser.displayName || (firebaseUser.isAnonymous ? 'Guest Traveler' : firebaseUser.email?.split('@')[0]) || 'Unknown Hero',
+    photoURL: firebaseUser.photoURL,
+    isAnonymous: firebaseUser.isAnonymous
   };
 };
 
 export const authService = {
   signup: async (email: string, pass: string): Promise<User> => {
-    const credential = await createUserWithEmailAndPassword(auth, email, pass);
-    return mapUser(credential.user)!;
+    if (!auth) throw new Error("Firebase Auth not configured.");
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, pass);
+      if (!result.user) throw new Error("Signup failed - no user returned");
+      return mapUser(result.user)!;
+    } catch (error) {
+      console.error("Signup Error:", error);
+      throw error;
+    }
   },
 
   login: async (email: string, pass: string): Promise<User> => {
-    const credential = await signInWithEmailAndPassword(auth, email, pass);
-    return mapUser(credential.user)!;
+    if (!auth) throw new Error("Firebase Auth not configured.");
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, pass);
+      if (!result.user) throw new Error("Login failed - no user returned");
+      return mapUser(result.user)!;
+    } catch (error) {
+      console.error("Login Error:", error);
+      throw error;
+    }
   },
-  
+
   loginWithGoogle: async (): Promise<User> => {
-    const provider = new GoogleAuthProvider();
-    const credential = await signInWithPopup(auth, provider);
-    return mapUser(credential.user)!;
+    if (!auth) throw new Error("Firebase Auth not configured.");
+    try {
+      const provider = new GoogleAuthProvider();
+      // Configure to force account selection if needed, or simple login
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      
+      const result = await signInWithPopup(auth, provider);
+      if (!result.user) throw new Error("Google Login failed - no user returned");
+      
+      return mapUser(result.user)!;
+    } catch (error) {
+      const authError = error as any;
+      console.error("Google Auth Error:", authError.code, authError.message);
+      throw error;
+    }
+  },
+
+  loginAnonymously: async (): Promise<User> => {
+    if (!auth) throw new Error("Firebase Auth not configured.");
+    try {
+      const result = await signInAnonymously(auth);
+      if (!result.user) throw new Error("Anonymous Login failed - no user returned");
+      return mapUser(result.user)!;
+    } catch (error) {
+      console.error("Anonymous Login Error:", error);
+      throw error;
+    }
+  },
+
+  resetPassword: async (email: string): Promise<void> => {
+    if (!auth) throw new Error("Firebase Auth not configured.");
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      console.error("Reset Password Error:", error);
+      throw error;
+    }
   },
 
   logout: async () => {
-    await signOut(auth);
+    if (!auth) return;
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout Error:", error);
+    }
   },
 
   onAuthStateChange: (callback: (user: User | null) => void) => {
-    return onAuthStateChanged(auth, (user) => {
-      callback(mapUser(user));
+    if (!auth) {
+        // If auth is not configured, we just return a dummy unsubscribe function
+        // and call callback(null) immediately so the app treats it as logged out
+        callback(null);
+        return () => {};
+    }
+    return onAuthStateChanged(auth, (firebaseUser) => {
+      callback(mapUser(firebaseUser));
     });
   },
 
   getCurrentUser: (): User | null => {
+    if (!auth) return null;
     return mapUser(auth.currentUser);
-  },
-  
-  updateProfileName: async (name: string) => {
-    if (auth.currentUser) {
-      await updateProfile(auth.currentUser, {
-        displayName: name
-      });
-    }
   }
 };

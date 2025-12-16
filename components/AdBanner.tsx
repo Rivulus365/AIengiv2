@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { DiagonalPattern } from './VisualAssets';
 
 const ADS = [
   {
@@ -55,7 +56,7 @@ const AdBanner: React.FC = () => {
   return (
     <div className="w-full py-3 px-6 border-t border-[#292524] bg-[#0c0a09]/30 shrink-0">
       <div className={`w-full h-20 bg-[#050404] border border-[#292524] rounded-sm flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer shadow-inner transition-colors duration-500 ${ad.bgHover}`}>
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-[0.03]"></div>
+          <DiagonalPattern className="text-stone-700" opacity={0.03} />
           
           {/* Ad Indicator */}
           <span className="text-[7px] uppercase tracking-widest text-stone-800 absolute top-1 right-2 border border-stone-900 px-1 rounded">Sponsored</span>
@@ -74,4 +75,3 @@ const AdBanner: React.FC = () => {
 };
 
 export default AdBanner;
-    

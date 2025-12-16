@@ -1,68 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /backgrounds/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /classes/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /enemies/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /feats/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /items/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /races/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /skills/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /spells/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Static Game Data - Public Read, No Client Write
+    // (Admin SDK bypasses these rules for migration/updates)
+    
+    match /items/{document} { allow read: if true; allow write: if false; }
+    match /classes/{document} { allow read: if true; allow write: if false; }
+    match /spells/{document} { allow read: if true; allow write: if false; }
+    match /races/{document} { allow read: if true; allow write: if false; }
+    match /feats/{document} { allow read: if true; allow write: if false; }
+    match /backgrounds/{document} { allow read: if true; allow write: if false; }
+    match /enemies/{document} { allow read: if true; allow write: if false; }
+    match /skills/{document} { allow read: if true; allow write: if false; }
 
-      // Allow users to manage their own characters
-      match /characters/{characterId} {
-        allow read, delete: if request.auth != null && request.auth.uid == userId;
-        allow create, update: if request.auth != null && request.auth.uid == userId && isValidCharacter(request.resource.data);
-      }
+    // Default deny all other access
+    match /{document=**} {
+      allow read, write: if false;
     }
-    match /saves/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    match /games/{gameId} {
-      allow read, create: if request.auth != null;
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
-
-      // Allow players in the game to chat
-      match /messages/{messageId} {
-        allow read, create: if request.auth != null && (request.auth.uid == resource.data.ownerId || request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)).data.players);
-      }
-    }
-  }
-
-  function isValidCharacter(character) {
-    let validRaces = ["Human", "Elf", "Dwarf", "Halfling", "Dragonborn", "Gnome", "Half-Elf", "Half-Orc", "Tiefling", "Aarakocra", "Aasimar", "Firbolg", "Genasi (Fire/Water/Air/Earth)", "Goliath", "Kenku", "Lizardfolk", "Tabaxi", "Triton", "Tortle", "Yuan-ti Pureblood", "Bugbear"];
-    let validClasses = ["Warrior", "Rogue", "Mage", "Cleric", "Ranger", "Paladin", "Bard", "Druid", "Barbarian", "Monk", "Sorcerer", "Warlock"];
-
-    return character.name.size() > 0 && character.name.size() < 50 &&
-           character.level > 0 && character.level <= 20 &&
-           character.race in validRaces &&
-           character.class in validClasses;
   }
 }

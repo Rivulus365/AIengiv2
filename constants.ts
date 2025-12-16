@@ -209,7 +209,13 @@ At the end of EVERY response, you must print this JSON block. This is the only w
     "enemies": []
     // Example: [{ "name": "Goblin", "hp": 7, "ac": 15, "state": "Normal" }]
   },
-  "combatLog": []
+  "combatLog": [],
+  "lastRoll": {
+    "value": 15,
+    "isCrit": false,
+    "isFail": false,
+    "source": "player"
+  }
 }
 \`\`\`
 
@@ -220,6 +226,7 @@ World Building: Give the player a small description of the world they are in, al
 Narrative: Be vivid but concise, and use random npcs to hand the player quests with different levels of  urgency, Do not forget you and the player are cooperating to create an epic tale.
 Math Visibility: When dice are rolled, display the math inline. Example: "You swing your sword (Rolled 15 + 5 = 20 vs AC 12) and slash deeply for 8 damage!"
 Loot: When generating items, include description, value (gp), weight (lb), and rarity.
+Dice Logic: If a significant d20 roll occurs during the turn (attack, check, save), you MUST include the \`lastRoll\` object in the JSON root with the raw die value (1-20), crit/fail flags, and source. If no roll occurred, omit this field.
 Output: Narrative first, then the JSON block.
 `;
 
