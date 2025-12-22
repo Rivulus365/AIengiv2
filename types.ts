@@ -39,10 +39,10 @@ export interface Item {
 }
 
 export interface Equipment {
-  mainHand: Item | null;
-  offHand: Item | null;
-  body: Item | null;
-  accessory: Item | null;
+  mainHand?: Item;
+  offHand?: Item;
+  body?: Item;
+  accessory?: Item;
 }
 
 export interface Enemy {
@@ -112,7 +112,7 @@ export interface PlayerState {
   level: number;
   xp: number;
   nextLevelXp: number;
-  gold: number; // Added gold tracking
+  gold: number;
   hp: {
     current: number;
     max: number;
@@ -128,6 +128,18 @@ export interface PlayerState {
   features: string[];
 }
 
+export type DieType = 'd4' | 'd6' | 'd8' | 'd10' | 'd12' | 'd20';
+
+export interface RollData {
+  value: number;
+  sides?: number;
+  type?: DieType;
+  isCrit: boolean;
+  isFail: boolean;
+  source: 'player' | 'enemy';
+  label?: string; // e.g. "Attack", "Damage"
+}
+
 export interface GameState {
   player: PlayerState;
   equipment: Equipment;
@@ -135,12 +147,7 @@ export interface GameState {
   worldState: WorldState;
   combat: CombatState;
   combatLog: CombatLogEntry[];
-  lastRoll?: {
-    value: number;
-    isCrit: boolean;
-    isFail: boolean;
-    source: 'player' | 'enemy';
-  };
+  lastRolls?: RollData[];
 }
 
 export type MessageRole = 'user' | 'model' | 'system';
@@ -214,7 +221,6 @@ export interface SkillDefinition {
   description: string;
 }
 
-// Data Transfer Object for Character Creation
 export interface CharacterCreationData {
     name: string;
     gender: string;

@@ -1,7 +1,8 @@
 {
-  "name": "Copy of Infinite Adventure Engine",
+  "name": "Infinite Adventure Engine",
   "description": "A sophisticated text-based RPG system powered by Gemini, featuring dynamic state tracking, RNG combat, and generative visuals.",
   "requestFramePermissions": [
-    "microphone"
+    "microphone",
+    "camera"
   ]
 }

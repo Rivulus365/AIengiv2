@@ -7,7 +7,9 @@ import {
     FontSize, 
     BaseStats, 
     ToastMessage,
-    CharacterCreationData
+    CharacterCreationData,
+    DieType,
+    RollData
 } from '../types';
 import { User } from '../services/auth';
 import { 
@@ -47,28 +49,28 @@ const handleImageGeneration = async (
     oldState: GameState, 
     msgId: string, 
     size: ImageSize
-): Promise<string | null> => {
+): Promise<string | undefined> => {
     const locationChanged = newState.worldState.location !== oldState.worldState.location;
     const combatChanged = newState.combat.isActive !== oldState.combat.isActive;
-    // We only generate if scene context shifted
     if (locationChanged || combatChanged) {
         const sceneDesc = text.slice(0, 300);
         const characterDesc = `${newState.player.race} ${newState.player.class}, ${newState.player.gender}`;
         const envDesc = newState.worldState.location;
-        return await generateSceneImage(sceneDesc, characterDesc, envDesc, size);
+        const result = await generateSceneImage(sceneDesc, characterDesc, envDesc, size);
+        return result || undefined;
     }
-    return null;
+    return undefined;
 };
 
 // --- STORE INTERFACE ---
 
 interface GameStoreState {
-    user: User | null;
+    user?: User;
     isGameLoaded: boolean;
     isLoading: boolean;
     isCharacterCreated: boolean;
     isLiveActive: boolean;
-    isMicMuted: boolean; // New state for mic mute
+    isMicMuted: boolean;
     gameState: GameState;
     messages: ChatMessage[];
     
@@ -83,7 +85,7 @@ interface GameStoreState {
     toasts: ToastMessage[];
 
     // Actions
-    setUser: (user: User | null) => Promise<void>;
+    setUser: (user: User | undefined) => Promise<void>;
     setSoundEnabled: (enabled: boolean) => void;
     setNarratorEnabled: (enabled: boolean) => void;
     setImageGenEnabled: (enabled: boolean) => void;
@@ -94,24 +96,27 @@ interface GameStoreState {
     createCharacter: (data: CharacterCreationData) => Promise<void>;
     processTurn: (input: string) => Promise<void>;
     toggleLiveMode: () => Promise<void>; 
-    toggleMicMute: () => void; // New action
+    toggleMicMute: () => void;
+    
+    manualRoll: (count: number, type: DieType) => void;
+    recordRolls: (rolls: RollData[]) => Promise<void>;
     
     manualSave: () => Promise<void>;
     resetCampaign: () => void;
     respawn: () => void;
-    levelUp: (stats: BaseStats) => Promise<void>;
+    levelUp: (stats: BaseStats, newProficiency?: string) => Promise<void>;
     
     addToast: (title: string, message?: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
     removeToast: (id: string) => void;
 }
 
 export const useGameStore = create<GameStoreState>((set, get) => ({
-    user: null,
+    user: undefined,
     isGameLoaded: false,
-    isLoading: false,
+    isLoading: true,
     isCharacterCreated: false,
     isLiveActive: false,
-    isMicMuted: false, // Default unmuted
+    isMicMuted: false,
     gameState: INITIAL_GAME_STATE,
     messages: [],
     
@@ -133,17 +138,19 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
                     gameState: savedData.gameState,
                     messages: savedData.messages,
                     isCharacterCreated: true, 
-                    isGameLoaded: true
+                    isGameLoaded: true,
+                    isLoading: false
                 });
             } else {
-                set({ isGameLoaded: true, isCharacterCreated: false });
+                set({ isGameLoaded: true, isCharacterCreated: false, isLoading: false });
             }
         } else {
             set({ 
                 gameState: INITIAL_GAME_STATE, 
                 messages: [], 
                 isCharacterCreated: false, 
-                isGameLoaded: false 
+                isGameLoaded: false,
+                isLoading: false
             });
         }
     },
@@ -169,11 +176,52 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         }));
     },
 
+    manualRoll: (count, type) => {
+        const sides = parseInt(type.substring(1));
+        const rolls: RollData[] = Array.from({ length: count }, () => {
+            const val = Math.floor(Math.random() * sides) + 1;
+            return {
+                value: val,
+                sides: sides,
+                type: type,
+                isCrit: val === sides && sides === 20,
+                isFail: val === 1 && sides === 20,
+                source: 'player',
+                label: type.toUpperCase()
+            };
+        });
+
+        // Trigger animation by setting snapshots
+        const tempMsgId = crypto.randomUUID();
+        const systemMsg: ChatMessage = {
+            id: tempMsgId,
+            role: 'system',
+            text: `[System]: Rolled ${count}${type}...`,
+            gameStateSnapshot: {
+                ...get().gameState,
+                lastRolls: rolls
+            }
+        };
+
+        set(state => ({
+            messages: [...state.messages, systemMsg]
+        }));
+        
+        get().recordRolls(rolls);
+    },
+
+    recordRolls: async (rolls) => {
+        const { user, gameState, messages } = get();
+        const newState = { ...gameState, lastRolls: rolls };
+        set({ gameState: newState });
+        if (user) await saveGame(user.uid, newState, messages);
+    },
+
     createCharacter: async (data) => {
         const { charClass, stats, feat, subclass, background } = data;
         const level = 1;
-        const proficiencyBonus = 2;
-        const derivedStats = calculateDerivedStats(stats, charClass, level, proficiencyBonus);
+        // Proficiency Bonus is derived inside calculateDerivedStats based on level
+        const derivedStats = calculateDerivedStats(stats, charClass, level);
         
         const classDefinitions = await GameDataService.getClasses();
         const classDef = classDefinitions[charClass];
@@ -186,12 +234,12 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         };
 
         const maxHp = calculateMaxHp(charClass, stats.con, level);
-        
         const initialProficiencies: string[] = ["Simple Weapons"];
         if (bgDef?.skillProficiencies) initialProficiencies.push(...bgDef.skillProficiencies);
-
-        const initialSkills = generateInitialSkills(stats, initialProficiencies, proficiencyBonus);
-
+        
+        // Use derived proficiency bonus
+        const initialSkills = generateInitialSkills(stats, initialProficiencies, derivedStats.proficiencyBonus);
+        
         const baseFeatures = classDef?.features || [];
         const subclassFeatures = (subclass && classDef?.subclasses?.[subclass]?.features) || [];
         const bgFeature = bgDef?.feature ? [bgDef.feature.name] : [];
@@ -223,13 +271,11 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         };
 
         const startPrompt = buildStartPrompt(data);
-        
         set({
             gameState: newGameState,
             isCharacterCreated: true,
             messages: [{ id: crypto.randomUUID(), role: 'user', text: startPrompt }]
         });
-
         await get().processTurn(startPrompt);
     },
 
@@ -239,8 +285,6 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         if (!user) return;
 
         set({ isLoading: true });
-
-        // Optimistic UI Update
         const lastMsg = messages[messages.length - 1];
         let currentMessages = [...messages];
         if (!lastMsg || lastMsg.text !== input || lastMsg.role !== 'user') {
@@ -249,18 +293,15 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         }
 
         try {
-            // Context Management
             const historyLimit = GAME_CONFIG.HISTORY_LIMIT || 10;
             const contextMessages = currentMessages.slice(-historyLimit).map(m => ({
                 role: m.role,
                 parts: [{ text: m.text }]
             }));
 
-            // Gemini Interaction
             const rawResponse = await generateAdventureResponse(contextMessages, input, gameState);
             const { cleanedText, gameState: parsedState } = extractGameState(rawResponse);
             
-            // State Reconciliation
             let finalState = gameState;
             if (parsedState) {
                 try {
@@ -276,28 +317,21 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
                 role: 'model',
                 text: cleanedText,
                 gameStateSnapshot: finalState,
-                isImageLoading: imageGenEnabled // Optimistically show loading
+                isImageLoading: imageGenEnabled
             };
 
-            // Intermediate Update
             set({ 
                 gameState: finalState, 
                 messages: [...currentMessages, modelMessage] 
             });
 
-            // Audio Narration Side-Effect
             if (narratorEnabled && cleanedText) {
-                // We don't await this, it plays when ready
                 generateNarration(cleanedText).then(audioData => {
-                    if (audioData) {
-                        audioService.playPCM(audioData);
-                    }
+                    if (audioData) audioService.playPCM(audioData);
                 });
             }
 
-            // Async Image Generation Side-Effect
             if (imageGenEnabled) {
-                // Determine if we actually need an image
                 const shouldGenerate = (finalState.worldState.location !== gameState.worldState.location) 
                                     || (finalState.combat.isActive !== gameState.combat.isActive)
                                     || (messages.length <= 1);
@@ -311,7 +345,6 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
                                 ),
                                 isLoading: false
                             }));
-                            // Save after image is ready (or failed)
                             if (user) saveGame(user.uid, finalState, get().messages);
                         });
                 } else {
@@ -325,40 +358,52 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
                 set({ isLoading: false });
                 if (user) await saveGame(user.uid, finalState, [...currentMessages, { ...modelMessage, isImageLoading: false }]);
             }
-
-        } catch (error) {
+        } catch (error: any) {
             console.error("Turn Processing Error:", error);
-            get().addToast("Error", "The fates are silent. Try again.", "error");
+            
+            if (error.message?.includes("Requested entity was not found.") || error.message?.includes("API key not valid")) {
+                get().addToast("API Error", "The selected API key is no longer valid. Please select a paid key again.", "error");
+                if (window.aistudio) window.aistudio.openSelectKey();
+            } else {
+                get().addToast("Error", "The fates are silent. Try again.", "error");
+            }
+            
             set({ isLoading: false });
         }
     },
 
     toggleLiveMode: async () => {
         const { isLiveActive } = get();
-        
         if (isLiveActive) {
-            // Disconnect
             liveService.disconnect();
             set({ isLiveActive: false, isMicMuted: false });
             get().addToast("Voice Mode Ended", "Returned to text adventure.", "info");
         } else {
-            // Connect
             try {
-                // Setup callbacks before connecting
+                // Pin the current sound state to the service
                 liveService.onStatusChange = (isActive) => set({ isLiveActive: isActive });
-                liveService.onMessage = (text) => {
-                    // Transcript handling logic could go here
-                };
-
-                // Ensure we start unmuted
                 set({ isMicMuted: false });
                 liveService.setMuted(false);
 
+                // API Key check must assume success for key selection if openSelectKey is called
+                if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
+                    await window.aistudio.openSelectKey();
+                }
+                
+                // Connection attempt
                 await liveService.connect();
-                // State is updated by onStatusChange callback
                 get().addToast("Voice Mode Active", "Speak to the Dungeon Master.", "success");
-            } catch (e) {
-                get().addToast("Connection Failed", "Could not start voice mode.", "error");
+            } catch (e: any) {
+                console.error("Live connection failed", e);
+                const isPermissionError = e.message?.toLowerCase().includes('permission') || e.message?.toLowerCase().includes('dismissed');
+                
+                get().addToast(
+                    isPermissionError ? "Microphone Required" : "Connection Failed", 
+                    isPermissionError ? "Please enable microphone access in your browser." : "Could not start voice mode. Please try again.", 
+                    "error"
+                );
+                
+                set({ isLiveActive: false });
             }
         }
     },
@@ -396,42 +441,50 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         const { gameState, user, messages } = get();
         const maxHp = gameState.player.hp.max;
         const newHp = Math.floor(maxHp / 2);
-        
-        const newState = {
-            ...gameState,
-            player: {
-                ...gameState.player,
-                hp: { ...gameState.player.hp, current: newHp }
-            }
-        };
-
+        const newState = { ...gameState, player: { ...gameState.player, hp: { ...gameState.player.hp, current: newHp } } };
         const respawnMsg: ChatMessage = {
             id: crypto.randomUUID(),
             role: 'model',
             text: "You gasp for air, awakening with a jolt. Death has rejected you... for now. You feel weak, but alive."
         };
-
         set({ gameState: newState, messages: [...messages, respawnMsg] });
         if (user) saveGame(user.uid, newState, [...messages, respawnMsg]);
     },
 
-    levelUp: async (newStats) => {
+    levelUp: async (newStats, newProficiency) => {
         const { gameState, user, messages } = get();
         const oldLevel = gameState.player.level;
         const newLevel = oldLevel + 1;
         
+        // 1. Calculate HP Increase
         const conMod = Math.floor((newStats.con - 10) / 2);
         const classDef = await GameDataService.getClasses().then(c => c[gameState.player.class]);
         const hitDie = classDef?.hitDie || 8;
         const hpIncrease = Math.floor(hitDie / 2) + 1 + conMod;
         const newMaxHp = gameState.player.hp.max + hpIncrease;
-        
+
+        // 2. Handle New Proficiency
+        const currentProficiencies = [...gameState.player.proficiencies];
+        if (newProficiency && !currentProficiencies.includes(newProficiency)) {
+            currentProficiencies.push(newProficiency);
+        }
+
+        // 3. Recalculate Derived Stats (Includes new Proficiency Bonus)
+        const newDerivedStats = calculateDerivedStats(newStats, gameState.player.class, newLevel);
+        const newPb = newDerivedStats.proficiencyBonus;
+
+        // 4. Recalculate Skills with new Stats and Proficiency Bonus
+        const newSkills = generateInitialSkills(newStats, currentProficiencies, newPb);
+
         const newState = {
             ...gameState,
             player: {
                 ...gameState.player,
                 level: newLevel,
                 stats: newStats,
+                proficiencies: currentProficiencies,
+                derivedStats: newDerivedStats,
+                skills: newSkills,
                 hp: { current: newMaxHp, max: newMaxHp },
                 unspentStatPoints: 0,
                 resources: {
@@ -440,13 +493,14 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
                 }
             }
         };
-
+        
+        const profMsg = newProficiency ? ` Gained proficiency in ${newProficiency}.` : "";
         const levelUpMsg: ChatMessage = {
             id: crypto.randomUUID(),
             role: 'system', 
-            text: `[System]: Level Up! You are now Level ${newLevel}. Max HP increased by ${hpIncrease}. Stats updated.`
+            text: `[System]: Level Up! You are now Level ${newLevel}.${profMsg} Max HP increased by ${hpIncrease}. Stats & Skills updated. Proficiency Bonus is now +${newPb}.`
         };
-
+        
         set({ gameState: newState, messages: [...messages, levelUpMsg] });
         if (user) saveGame(user.uid, newState, [...messages, levelUpMsg]);
         get().addToast("Level Up!", `Welcome to level ${newLevel}.`, "success");

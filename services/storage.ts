@@ -1,3 +1,4 @@
+
 import { GameState, ChatMessage } from '../types';
 
 const DB_NAME = 'InfiniteAdventureDB';
@@ -45,7 +46,7 @@ export const saveGame = async (userId: string, gameState: GameState, messages: C
   }
 };
 
-export const loadGame = async (userId: string): Promise<{ gameState: GameState; messages: ChatMessage[] } | null> => {
+export const loadGame = async (userId: string): Promise<{ gameState: GameState; messages: ChatMessage[] } | undefined> => {
   try {
     // 1. Try IndexedDB first
     const db = await openDB();
@@ -86,10 +87,10 @@ export const loadGame = async (userId: string): Promise<{ gameState: GameState; 
       }
     }
 
-    return null;
+    return undefined;
   } catch (error) {
     console.error('Failed to load game:', error);
-    return null;
+    return undefined;
   }
 };
 

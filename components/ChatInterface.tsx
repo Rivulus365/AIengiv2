@@ -1,8 +1,8 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { ChatMessage, ImageSize, GameState, FontSize } from '../types';
-import { Send, Image as ImageIcon, Sparkles, ArrowDown, Copy, Check, Loader2, Mic, MicOff, History, Square, Pause, Play } from 'lucide-react';
+import { ChatMessage, ImageSize, GameState, FontSize, RollData, DieType } from '../types';
+import { Send, Image as ImageIcon, Sparkles, ArrowDown, Copy, Check, Mic, MicOff, Square, Dices, ChevronUp, ChevronDown } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import DiceAnimation from './DiceAnimation';
 import { audioService } from '../services/audio';
@@ -39,32 +39,29 @@ const MessageBubble = React.memo(({ msg, fontSize, onImageLoad }: { msg: ChatMes
   };
 
   const isUser = msg.role === 'user';
+  const isSystem = msg.role === 'system';
+  const hasRolls = (msg.gameStateSnapshot?.lastRolls?.length || 0) > 0;
+  const confidenceScore = hasRolls ? 0.75 : 0.95;
 
-  // Determine probabilistic confidence for H-AI Pattern
-  // This is a simulation since the API doesn't expose confidence yet
-  // We mark combat-heavy logs as "Review Suggested" to encourage checking the math
-  const hasRolls = msg.gameStateSnapshot?.lastRoll !== undefined;
-  const confidenceScore = hasRolls ? 0.65 : 0.95;
+  if (isSystem) {
+      return (
+          <div className="py-2 flex justify-center animate-fade-in">
+              <div className="bg-stone-900/40 border border-stone-800 rounded-full px-4 py-1 text-[10px] uppercase tracking-[0.2em] font-bold text-stone-500">
+                  {msg.text.replace('[System]: ', '')}
+              </div>
+          </div>
+      );
+  }
 
   return (
     <div className={`group relative w-full animate-slide-up ${isUser ? 'flex justify-end py-4' : 'py-6'}`}>
-      
-      {/* Container */}
       <div className={`relative max-w-4xl w-full ${isUser ? 'w-auto' : ''}`}>
-        
-        {/* User Message Styling */}
         {isUser ? (
             <div className="bg-[#1c1917] border border-[#292524] rounded-2xl rounded-tr-none px-6 py-4 shadow-lg max-w-[85vw] md:max-w-xl">
                 <p className="text-stone-200 font-sans text-lg leading-relaxed">{msg.text.replace('[System]: ', '')}</p>
-                {msg.text.includes('[System]:') && (
-                    <span className="block mt-1 text-[10px] uppercase tracking-widest text-amber-500/60 font-bold">System Action</span>
-                )}
             </div>
         ) : (
-            /* Model Message Styling (Storybook Mode) */
             <div className={`space-y-6 ${getFontSizeClass(fontSize)} text-[#d6d3d1]`}>
-                
-                {/* Image Section */}
                 {msg.image && (
                     <div className="relative w-full max-w-2xl mx-auto rounded-lg overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-stone-800 group-hover:border-stone-700 transition-colors animate-scale-in">
                         <img
@@ -77,21 +74,12 @@ const MessageBubble = React.memo(({ msg, fontSize, onImageLoad }: { msg: ChatMes
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
                     </div>
                 )}
-
-                {/* Text Content */}
                 <div className="prose prose-invert prose-p:text-stone-300 prose-headings:text-amber-500 prose-headings:font-display prose-strong:text-amber-400 prose-em:text-stone-400 max-w-none px-2 md:px-8">
                     <ReactMarkdown>{msg.text}</ReactMarkdown>
                 </div>
-
-                {/* H-AI Footer */}
                 <div className="px-8 mt-2 flex justify-between items-center opacity-50 group-hover:opacity-100 transition-opacity">
                     <ConfidenceChip score={confidenceScore} />
-                    
-                    <button
-                        onClick={handleCopy}
-                        className="p-2 text-stone-600 hover:text-amber-500 transition-colors"
-                        title="Copy to clipboard"
-                    >
+                    <button onClick={handleCopy} className="p-2 text-stone-600 hover:text-amber-500 transition-colors" title="Copy to clipboard">
                         {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                     </button>
                 </div>
@@ -102,44 +90,72 @@ const MessageBubble = React.memo(({ msg, fontSize, onImageLoad }: { msg: ChatMes
   );
 });
 
+const DiceBag = ({ onRoll }: { onRoll: (count: number, type: DieType) => void }) => {
+    const [count, setCount] = useState(1);
+    const diceTypes: DieType[] = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+
+    return (
+        <div className="glass-panel p-4 rounded-xl shadow-2xl border-amber-900/30 flex flex-col gap-4 min-w-[200px] animate-in slide-in-from-bottom-2 duration-300">
+            <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500">Dice Bag</span>
+                <div className="flex items-center gap-2 bg-black/40 px-2 py-1 rounded border border-white/5">
+                    <button onClick={() => setCount(Math.max(1, count - 1))} className="text-stone-500 hover:text-white">-</button>
+                    <span className="text-xs font-mono font-bold text-stone-200">{count}</span>
+                    <button onClick={() => setCount(Math.min(10, count + 1))} className="text-stone-500 hover:text-white">+</button>
+                </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+                {diceTypes.map(type => (
+                    <button
+                        key={type}
+                        onClick={() => onRoll(count, type)}
+                        className="py-2 px-1 bg-[#1c1917] border border-[#292524] rounded-lg hover:border-amber-600/50 hover:text-amber-400 transition-all text-xs font-bold font-mono"
+                    >
+                        {type.toUpperCase()}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 const ChatInterface: React.FC = () => {
-  const { messages, isLoading, gameState, imageSize, fontSize, processTurn, setImageSize, isLiveActive, toggleLiveMode, isMicMuted, toggleMicMute } = useGameStore();
+  const { messages, isLoading, gameState, imageSize, fontSize, processTurn, setImageSize, isLiveActive, toggleLiveMode, isMicMuted, toggleMicMute, soundEnabled, manualRoll } = useGameStore();
   
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [loadingTipIndex, setLoadingTipIndex] = useState(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [showDiceBag, setShowDiceBag] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [diceQueue, setDiceQueue] = useState<any[]>([]);
-  const [currentDice, setCurrentDice] = useState<any>(null);
-  const processedMessageIds = useRef<Set<string>>(new Set());
-  
-  const suggestions = useActionSuggestions(gameState);
+  const [rollQueue, setRollQueue] = useState<RollData[][]>([]);
+  const [currentBatch, setCurrentBatch] = useState<RollData[]>([]);
+  const processedBatchIds = useRef<Set<string>>(new Set());
 
-  // --- Effects & Logic (Same as before, simplified for brevity) ---
   useEffect(() => {
     if (messages.length === 0) return;
     const lastMsg = messages[messages.length - 1];
-    if (lastMsg.role === 'model' && !processedMessageIds.current.has(lastMsg.id)) {
-      const sourceState = lastMsg.gameStateSnapshot || gameState;
-      if (sourceState.lastRoll) {
-        setDiceQueue(prev => [...prev, { ...sourceState.lastRoll }]);
+    if ((lastMsg.role === 'model' || lastMsg.role === 'system') && !processedBatchIds.current.has(lastMsg.id)) {
+      const rolls = lastMsg.gameStateSnapshot?.lastRolls;
+      if (rolls && rolls.length > 0) {
+        setRollQueue(prev => [...prev, rolls]);
       }
-      processedMessageIds.current.add(lastMsg.id);
+      processedBatchIds.current.add(lastMsg.id);
     }
-  }, [messages, gameState]);
+  }, [messages]);
 
   useEffect(() => {
-    if (!currentDice && diceQueue.length > 0) {
-      setCurrentDice(diceQueue[0]);
-      setDiceQueue(prev => prev.slice(1));
+    if (currentBatch.length === 0 && rollQueue.length > 0) {
+      const nextBatch = rollQueue[0];
+      setCurrentBatch(nextBatch);
+      setRollQueue(prev => prev.slice(1));
     }
-  }, [diceQueue, currentDice]);
+  }, [rollQueue, currentBatch]);
 
   useEffect(() => {
     let interval: any;
@@ -172,18 +188,10 @@ const ChatInterface: React.FC = () => {
     }
   };
 
-  const handleShortcut = (action: string, isSystem = false, autoSend = true) => {
-    if (isLoading) return;
-    audioService.resume();
-    audioService.playUiSound('click');
-    const text = isSystem ? `[System]: ${action}` : action;
-    if (autoSend) {
-        setHistory(prev => [...prev, text]);
-        processTurn(text);
-    } else {
-        setInput(text);
-        inputRef.current?.focus();
-    }
+  const handleManualRoll = (count: number, type: DieType) => {
+      setShowDiceBag(false);
+      audioService.resume();
+      manualRoll(count, type);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -207,8 +215,6 @@ const ChatInterface: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full relative">
-      
-      {/* Image Quality Toggle (Floating Top Right) */}
       <div className="absolute top-4 right-6 z-20 opacity-0 hover:opacity-100 transition-opacity duration-300">
         <div className="glass-panel rounded-full px-3 py-1 flex items-center gap-2 text-xs">
           <ImageIcon className="w-3 h-3 text-stone-400" />
@@ -224,20 +230,15 @@ const ChatInterface: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Chat Area */}
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-4 md:px-[15%] pt-8 pb-32 scroll-smooth custom-scrollbar"
       >
-        {/* Welcome Spacer */}
         <div className="h-8"></div>
-
         {messages.map((msg) => (
           <MessageBubble key={msg.id} msg={msg} fontSize={fontSize} />
         ))}
-
-        {/* Loading Indicator */}
         {isLoading && (
           <div className="py-12 flex justify-center animate-pulse">
             <div className="flex flex-col items-center gap-3 text-amber-700/60 font-display uppercase tracking-widest text-xs">
@@ -246,11 +247,9 @@ const ChatInterface: React.FC = () => {
             </div>
           </div>
         )}
-        
         <div ref={messagesEndRef} className="h-4" />
       </div>
 
-      {/* Scroll to Bottom Button */}
       {showScrollButton && (
         <button 
             onClick={scrollToBottom}
@@ -260,17 +259,40 @@ const ChatInterface: React.FC = () => {
         </button>
       )}
 
-      {/* Input Area (Floating Dock) */}
       <div className="absolute bottom-0 left-0 right-0 z-30 p-4 md:p-6 bg-gradient-to-t from-black via-black/90 to-transparent">
-        <div className="max-w-4xl mx-auto space-y-3">
+        <div className="max-w-4xl mx-auto space-y-3 relative">
             
-            {/* Suggestion Chips */}
+            {showDiceBag && (
+                <div className="absolute bottom-full mb-4 left-0 z-50">
+                    <DiceBag onRoll={handleManualRoll} />
+                </div>
+            )}
+
             {!isLiveActive && (
                 <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar mask-gradient px-1">
-                    {suggestions.map((action, idx) => (
+                    <button
+                        onClick={() => setShowDiceBag(!showDiceBag)}
+                        className={`glass-button px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap flex items-center gap-2 ${showDiceBag ? 'bg-amber-900/20 border-amber-500 text-amber-400' : 'text-stone-400 hover:text-stone-200'}`}
+                    >
+                        <Dices className="w-3 h-3" /> Dice Bag
+                    </button>
+                    {useActionSuggestions(gameState).map((action, idx) => (
                         <button
                             key={idx}
-                            onClick={() => handleShortcut(action.text, action.isSystem, action.autoSend)}
+                            onClick={() => {
+                                setShowDiceBag(false);
+                                if (isLoading) return;
+                                audioService.resume();
+                                audioService.playUiSound('click');
+                                const text = action.isSystem ? `[System]: ${action.text}` : action.text;
+                                if (action.autoSend) {
+                                    setHistory(prev => [...prev, text]);
+                                    processTurn(text);
+                                } else {
+                                    setInput(text);
+                                    inputRef.current?.focus();
+                                }
+                            }}
                             disabled={isLoading}
                             className={`glass-button px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap flex items-center gap-2 ${action.color || 'text-stone-400 hover:text-stone-200'}`}
                         >
@@ -280,11 +302,8 @@ const ChatInterface: React.FC = () => {
                 </div>
             )}
 
-            {/* Live Mode Visualizer & Controls */}
             {isLiveActive && (
                 <div className={`w-full h-16 glass-panel rounded-xl flex items-center justify-between px-6 border-${isMicMuted ? 'amber' : 'emerald'}-500/30 shadow-[0_0_20px_rgba(${isMicMuted ? '245,158,11' : '16,185,129'},0.2)] animate-pulse-glow transition-all duration-500`}>
-                    
-                    {/* Status Visuals */}
                     <div className="flex items-center gap-4">
                         <div className="flex gap-1 items-end h-8">
                             {[...Array(5)].map((_, i) => (
@@ -299,32 +318,19 @@ const ChatInterface: React.FC = () => {
                             {isMicMuted ? 'Mic Paused' : 'Listening...'}
                         </span>
                     </div>
-
-                    {/* Controls */}
                     <div className="flex items-center gap-2">
-                        <button
-                            onClick={toggleMicMute}
-                            className={`p-2 rounded-full border transition-all ${isMicMuted ? 'bg-amber-500 text-black border-amber-400' : 'bg-black/40 text-stone-400 border-stone-700 hover:text-white'}`}
-                            title={isMicMuted ? "Resume Listening" : "Pause Listening"}
-                        >
+                        <button onClick={toggleMicMute} className={`p-2 rounded-full border transition-all ${isMicMuted ? 'bg-amber-500 text-black border-amber-400' : 'bg-black/40 text-stone-400 border-stone-700 hover:text-white'}`} title={isMicMuted ? "Resume Listening" : "Pause Listening"}>
                             {isMicMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                         </button>
-                        <button
-                            onClick={toggleLiveMode}
-                            className="p-2 rounded-full bg-red-950/50 border border-red-900/50 text-red-500 hover:bg-red-900/80 hover:text-white transition-all"
-                            title="Stop Session"
-                        >
+                        <button onClick={toggleLiveMode} className="p-2 rounded-full bg-red-950/50 border border-red-900/50 text-red-500 hover:bg-red-900/80 hover:text-white transition-all" title="Stop Session">
                             <Square className="w-4 h-4 fill-current" />
                         </button>
                     </div>
                 </div>
             )}
-
-            {/* Text Input Bar */}
             <div className={`relative transition-all duration-500 ${isLiveActive ? 'hidden' : 'opacity-100'}`}>
                 <form onSubmit={handleSubmit} className="relative group">
                     <div className="absolute inset-0 bg-amber-500/5 rounded-2xl blur-xl group-focus-within:bg-amber-500/10 transition-all duration-500"></div>
-                    
                     <input
                         ref={inputRef}
                         type="text"
@@ -336,21 +342,11 @@ const ChatInterface: React.FC = () => {
                         className="w-full glass-panel bg-black/60 rounded-2xl py-4 pl-6 pr-32 text-lg text-stone-200 placeholder-stone-600 focus:outline-none focus:border-amber-700/50 focus:ring-1 focus:ring-amber-900/20 transition-all font-serif"
                         autoComplete="off"
                     />
-
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                        <button
-                            type="button"
-                            onClick={toggleLiveMode}
-                            className={`p-2 rounded-xl transition-all ${isLiveActive ? 'text-red-500 bg-red-950/30' : 'text-stone-500 hover:text-stone-300 hover:bg-white/5'}`}
-                            title="Voice Mode"
-                        >
+                        <button type="button" onClick={toggleLiveMode} className={`p-2 rounded-xl transition-all ${isLiveActive ? 'text-red-500 bg-red-950/30' : 'text-stone-500 hover:text-stone-300 hover:bg-white/5'}`} title="Voice Mode">
                             {isLiveActive ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                         </button>
-                        <button
-                            type="submit"
-                            disabled={!input.trim() || isLoading}
-                            className="p-2 bg-amber-700 hover:bg-amber-600 text-white rounded-xl shadow-lg transition-all disabled:opacity-0 disabled:scale-75"
-                        >
+                        <button type="submit" disabled={!input.trim() || isLoading} className="p-2 bg-amber-700 hover:bg-amber-600 text-white rounded-xl shadow-lg transition-all disabled:opacity-0 disabled:scale-75">
                             <Send className="w-5 h-5" />
                         </button>
                     </div>
@@ -359,13 +355,12 @@ const ChatInterface: React.FC = () => {
         </div>
       </div>
 
-      {/* Dice Overlay */}
-      {currentDice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+      {currentBatch.length > 0 && (
+        <div className="fixed inset-0 z-50 pointer-events-none bg-black/40 backdrop-blur-md animate-in fade-in">
           <DiceAnimation
-            {...currentDice}
-            soundEnabled={true} // Passed from store usually
-            onComplete={() => setCurrentDice(null)}
+            rolls={currentBatch}
+            soundEnabled={soundEnabled}
+            onComplete={() => setCurrentBatch([])}
           />
         </div>
       )}

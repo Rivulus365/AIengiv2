@@ -1,10 +1,13 @@
 
-import React, { memo } from 'react';
+import React, { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { CombatState, CombatLogEntry, Item, Equipment, PlayerState } from '../types';
+// Added BaseStats to the types import to fix the compilation error on line 160
+import { CombatState, CombatLogEntry, Item, Equipment, PlayerState, Skill, BaseStats } from '../types';
 import { 
-    Skull, Shield, Activity, Map, Clock, Compass, Coins, Sword, Shirt, Zap, Crosshair, Ban, User, Backpack, Crown
+    Skull, Shield, Activity, Map, Clock, Compass, Coins, Sword, Shirt, Zap, Crosshair, Ban, User, Backpack, Crown, BookOpen, Star
 } from 'lucide-react';
+import { SKILL_DEFINITIONS } from '../constants';
+import { getModifier } from '../utils/engine';
 
 // --- Components ---
 
@@ -49,7 +52,6 @@ const EquipmentSlot: React.FC<{ label: string, item?: Item | null, icon: React.E
                 {item?.name || "Empty"}
             </div>
         </div>
-        {/* Tooltip would go here in a refined implementation */}
     </div>
 );
 
@@ -156,9 +158,48 @@ const CombatWidget: React.FC<{ combat: CombatState, log: CombatLogEntry[] }> = (
     );
 };
 
+// Fixed: Added BaseStats to the props definition to resolve the missing name error
+const SkillsList: React.FC<{ skills: Skill[], playerStats: BaseStats }> = ({ skills, playerStats }) => {
+    return (
+        <div className="space-y-1 animate-fade-in">
+             <div className="flex justify-between px-2 pb-2 text-[9px] font-bold uppercase tracking-widest text-stone-500 border-b border-white/5 mb-2">
+                <span>Skill</span>
+                <span className="pr-4 text-right">Modifier</span>
+            </div>
+            <div className="space-y-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                {skills.map(skill => {
+                    const def = SKILL_DEFINITIONS[skill.name];
+                    const statMod = def ? getModifier(playerStats[def.ability]) : 0;
+                    return (
+                        <div key={skill.name} className="flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors group relative">
+                            <div className="flex items-center gap-2">
+                                <div className={`w-1.5 h-1.5 rounded-full ${skill.isProficient ? 'bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.5)]' : 'bg-stone-700'}`}></div>
+                                <div>
+                                    <span className={`text-xs ${skill.isProficient ? 'text-stone-200 font-bold' : 'text-stone-400'}`}>{skill.name}</span>
+                                    {def && <span className="ml-1 text-[9px] text-stone-600 uppercase font-mono">{def.ability}</span>}
+                                </div>
+                            </div>
+                            
+                            <div className="flex flex-col items-end">
+                                <span className={`text-xs font-mono font-bold ${skill.modifier >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                    {skill.modifier >= 0 ? '+' : ''}{skill.modifier}
+                                </span>
+                                <div className="text-[8px] text-stone-700 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {statMod >= 0 ? '+' : ''}{statMod} stat {skill.isProficient ? '+ PB' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    );
+}
+
 const GameStateSidebar: React.FC = () => {
     const gameState = useGameStore(state => state.gameState);
     const { player, worldState, combat, combatLog, inventory, equipment } = gameState;
+    const [activeTab, setActiveTab] = useState<'gear' | 'skills'>('gear');
 
     return (
         <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto custom-scrollbar pb-20">
@@ -188,42 +229,64 @@ const GameStateSidebar: React.FC = () => {
             {/* World Info */}
             <WorldWidget location={worldState.location} time={worldState.time} quest={worldState.activeQuest} />
 
-            {/* Dynamic Content: Combat OR Exploration */}
+            {/* Dynamic Content: Combat OR Tabbed Info */}
             {combat.isActive ? (
                 <CombatWidget combat={combat} log={combatLog} />
             ) : (
                 <div className="space-y-4 animate-fade-in">
                     
-                    {/* Equipment */}
-                    <div className="space-y-2">
-                        <div className="text-[10px] uppercase text-stone-600 font-bold tracking-widest pl-1">Equipment</div>
-                        <div className="grid gap-2">
-                            <EquipmentSlot label="Main Hand" item={equipment.mainHand} icon={Sword} />
-                            <EquipmentSlot label="Off Hand" item={equipment.offHand} icon={Shield} />
-                            <EquipmentSlot label="Armor" item={equipment.body} icon={Shirt} />
-                        </div>
+                    {/* Tabs */}
+                    <div className="flex border-b border-white/10">
+                        <button 
+                            onClick={() => setActiveTab('gear')}
+                            className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-2 ${activeTab === 'gear' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-stone-500 hover:text-stone-300'}`}
+                        >
+                            <Backpack className="w-3 h-3" /> Gear
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('skills')}
+                            className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-2 ${activeTab === 'skills' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-stone-500 hover:text-stone-300'}`}
+                        >
+                            <BookOpen className="w-3 h-3" /> Skills
+                        </button>
                     </div>
 
-                    {/* Inventory Preview */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-center pl-1 pr-1">
-                            <div className="text-[10px] uppercase text-stone-600 font-bold tracking-widest">Backpack</div>
-                            <span className="text-[9px] text-stone-700">{inventory.length} Items</span>
-                        </div>
-                        <div className="glass-panel rounded-xl overflow-hidden">
-                            {inventory.slice(0, 5).map((item, idx) => (
-                                <div key={idx} className="p-3 border-b border-white/5 last:border-0 flex justify-between items-center hover:bg-white/5 transition-colors">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-1 h-1 rounded-full bg-stone-600"></div>
-                                        <span className="text-xs text-stone-300">{item.name}</span>
-                                    </div>
-                                    {item.qty && item.qty > 1 && <span className="text-[10px] text-stone-500">x{item.qty}</span>}
+                    {activeTab === 'gear' ? (
+                        <>
+                            {/* Equipment */}
+                            <div className="space-y-2">
+                                <div className="text-[10px] uppercase text-stone-600 font-bold tracking-widest pl-1">Equipment</div>
+                                <div className="grid gap-2">
+                                    <EquipmentSlot label="Main Hand" item={equipment.mainHand} icon={Sword} />
+                                    <EquipmentSlot label="Off Hand" item={equipment.offHand} icon={Shield} />
+                                    <EquipmentSlot label="Armor" item={equipment.body} icon={Shirt} />
                                 </div>
-                            ))}
-                            {inventory.length === 0 && <div className="p-4 text-center text-xs text-stone-600 italic">Empty</div>}
-                            {inventory.length > 5 && <div className="p-2 text-center text-[10px] text-stone-500 bg-black/20">+{inventory.length - 5} more</div>}
-                        </div>
-                    </div>
+                            </div>
+
+                            {/* Inventory Preview */}
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center pl-1 pr-1">
+                                    <div className="text-[10px] uppercase text-stone-600 font-bold tracking-widest">Backpack</div>
+                                    <span className="text-[9px] text-stone-700">{inventory.length} Items</span>
+                                </div>
+                                <div className="glass-panel rounded-xl overflow-hidden">
+                                    {inventory.slice(0, 5).map((item, idx) => (
+                                        <div key={idx} className="p-3 border-b border-white/5 last:border-0 flex justify-between items-center hover:bg-white/5 transition-colors">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1 h-1 rounded-full bg-stone-600"></div>
+                                                <span className="text-xs text-stone-300">{item.name}</span>
+                                            </div>
+                                            {item.qty && item.qty > 1 && <span className="text-[10px] text-stone-500">x{item.qty}</span>}
+                                        </div>
+                                    ))}
+                                    {inventory.length === 0 && <div className="p-4 text-center text-xs text-stone-600 italic">Empty</div>}
+                                    {inventory.length > 5 && <div className="p-2 text-center text-[10px] text-stone-500 bg-black/20">+{inventory.length - 5} more</div>}
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <SkillsList skills={player.skills} playerStats={player.stats} />
+                    )}
                 </div>
             )}
         </div>

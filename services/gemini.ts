@@ -3,11 +3,9 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { SYSTEM_PROMPT } from '../constants';
 import { GameState, ImageSize } from '../types';
 
-// Initialize the client. API_KEY is assumed to be available in process.env.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 // Optimized for speed and capability
-const GM_MODEL = 'gemini-2.5-flash';
+const GM_TEXT_MODEL = 'gemini-3-pro-preview';
+const GM_SUMMARY_MODEL = 'gemini-3-flash-preview';
 
 interface GeminiConfig {
     temperature?: number;
@@ -28,6 +26,9 @@ export const generateAdventureResponse = async (
   currentGameState: GameState
 ): Promise<string> => {
   try {
+    // Initialize right before call to ensure up-to-date API key from selection dialog
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     // We prepend the current game state to the user input to ensure the model "remembers" it strictly
     const stateContext = `
     CURRENT STATE:
@@ -38,7 +39,7 @@ export const generateAdventureResponse = async (
     `;
 
     const chat = ai.chats.create({
-      model: GM_MODEL,
+      model: GM_TEXT_MODEL,
       config: {
         systemInstruction: SYSTEM_PROMPT,
       },
@@ -64,8 +65,11 @@ export const generateSceneImage = async (
   characterVisuals: string,
   environmentContext: string,
   size: ImageSize = ImageSize.Size_1K
-): Promise<string | null> => {
+): Promise<string | undefined> => {
   try {
+    // Initialize right before call to ensure up-to-date API key from selection dialog
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     const prompt = `Fantasy RPG Art, Digital Painting, Masterpiece, High Detail, Anatomically Correct, Perfect Proportions. 
     Environment/Setting: ${environmentContext}.
     Action/Scene: ${sceneDescription}. 
@@ -73,8 +77,6 @@ export const generateSceneImage = async (
     STRICT DIRECTIVE: The background and atmosphere MUST match the '${environmentContext}'. Ensure the character is consistent with the details provided.`;
     
     // Select model based on size/quality needs. 
-    // gemini-2.5-flash-image is used for standard 1K to ensure broad compatibility.
-    // gemini-3-pro-image-preview is used for higher resolutions.
     const modelName = (size === ImageSize.Size_1K) ? 'gemini-2.5-flash-image' : 'gemini-3-pro-image-preview';
 
     // Build configuration
@@ -97,7 +99,7 @@ export const generateSceneImage = async (
       contents: {
         parts: [{ text: prompt }]
       },
-      config: config as any // Cast needed as SDK types might vary
+      config: config as any // Cast needed for imageConfig support in SDK
     });
 
     // Extract image
@@ -106,10 +108,10 @@ export const generateSceneImage = async (
         return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
       }
     }
-    return null;
+    return undefined;
   } catch (error) {
     console.error("Image Generation Error:", error);
-    return null;
+    return undefined;
   }
 };
 
@@ -117,6 +119,9 @@ export const summarizeHistory = async (
   history: { role: string; parts: { text: string }[] }[]
 ): Promise<string> => {
   try {
+    // Initialize right before call to ensure up-to-date API key from selection dialog
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     const historyText = history.map(h => `${h.role}: ${h.parts[0].text}`).join('\n');
     const prompt = `
     Summarize the following RPG session history into a concise paragraph that captures the key narrative beats, important decisions, and current situation. 
@@ -127,7 +132,7 @@ export const summarizeHistory = async (
     `;
 
     const response = await ai.models.generateContent({
-      model: GM_MODEL,
+      model: GM_SUMMARY_MODEL,
       contents: prompt,
     });
 
@@ -138,8 +143,11 @@ export const summarizeHistory = async (
   }
 };
 
-export const generateNarration = async (text: string): Promise<string | null> => {
+export const generateNarration = async (text: string): Promise<string | undefined> => {
     try {
+        // Initialize right before call to ensure up-to-date API key from selection dialog
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
             contents: { parts: [{ text: text }] },
@@ -153,9 +161,9 @@ export const generateNarration = async (text: string): Promise<string | null> =>
             },
         });
         
-        return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+        return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || undefined;
     } catch (error) {
         console.error("TTS Generation Error:", error);
-        return null;
+        return undefined;
     }
 };

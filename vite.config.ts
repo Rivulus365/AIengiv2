@@ -26,26 +26,16 @@ export default defineConfig(async ({ mode }) => {
             const localKeyPath = path.resolve('gcp-key.json');
             if (fs.existsSync(localKeyPath)) {
                 process.env.GOOGLE_APPLICATION_CREDENTIALS = localKeyPath;
-                console.log(`[Secret Manager] Auto-detected credentials: ${localKeyPath}`);
             }
         }
 
         // Dynamically import to avoid build failures if dependencies or creds are missing locally
         const { SecretManagerServiceClient } = await import('@google-cloud/secret-manager');
         
-        // Log credential status for debugging
-        if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-            console.log(`[Secret Manager] Credential path found: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
-        } else {
-            console.log('[Secret Manager] No GOOGLE_APPLICATION_CREDENTIALS env var found. Trying default auth.');
-        }
-
         const client = new SecretManagerServiceClient();
         const projectId = await client.getProjectId();
         
         if (projectId) {
-            console.log(`[Secret Manager] Connected to project: ${projectId}`);
-            
             // Map of Secret Name -> Internal Env Var Key
             const secretMappings: Record<string, string> = {
                 'GEMINI_API_KEY': 'API_KEY',
@@ -66,7 +56,6 @@ export default defineConfig(async ({ mode }) => {
                     
                     if (payload) {
                         envVars[envKey] = payload.trim(); // Trim whitespace/newlines
-                        console.log(`[Secret Manager] Loaded: ${secretName}`);
                     }
                 } catch (e) {
                     // Secret might not exist or permissions issue; silent fallback to local env
@@ -75,7 +64,7 @@ export default defineConfig(async ({ mode }) => {
         }
     } catch (error) {
         // Non-critical error: Log warning and proceed (likely local environment without GCP creds)
-        console.warn('[Secret Manager] Skipped secret fetching. Ensure GOOGLE_APPLICATION_CREDENTIALS is set for remote secrets.');
+        // console.warn('[Secret Manager] Skipped secret fetching.');
     }
 
     return {

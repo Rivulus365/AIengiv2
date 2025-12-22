@@ -2,8 +2,6 @@
 import { GoogleGenAI, LiveServerMessage, Modality, Blob } from '@google/genai';
 import { SYSTEM_PROMPT } from '../constants';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 // Audio configuration
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
@@ -34,18 +32,30 @@ class LiveClient {
         if (this.session) return;
 
         try {
+            // Request microphone access immediately to capitalize on the user gesture
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(err => {
+                const msg = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || err.message?.toLowerCase().includes('dismissed')
+                    ? "Microphone access was denied or dismissed. Please ensure permissions are granted in your browser settings."
+                    : "An error occurred while accessing the microphone.";
+                throw new Error(msg);
+            });
+
             // Initialize Audio Contexts
-            this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: INPUT_SAMPLE_RATE });
-            this.outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: OUTPUT_SAMPLE_RATE });
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            this.inputAudioContext = new AudioContextClass({ sampleRate: INPUT_SAMPLE_RATE });
+            this.outputAudioContext = new AudioContextClass({ sampleRate: OUTPUT_SAMPLE_RATE });
+            
+            // Resume contexts immediately
+            if (this.inputAudioContext.state === 'suspended') await this.inputAudioContext.resume();
+            if (this.outputAudioContext.state === 'suspended') await this.outputAudioContext.resume();
+
             this.outputNode = this.outputAudioContext.createGain();
             this.outputNode.connect(this.outputAudioContext.destination);
 
-            // Get Mic Stream
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Initialize the API client right before connection
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-            // Create Live Session
-            // We modify the system instruction to prevent JSON output during voice chat
-            const voiceSystemPrompt = SYSTEM_PROMPT + "\n\n[VOICE MODE ACTIVE]: Do NOT output the JSON state block in this mode. Keep responses concise, atmospheric, and purely narrative. Do not read out game mechanics or math unless critical.";
+            const voiceSystemPrompt = SYSTEM_PROMPT + "\n\n[VOICE MODE ACTIVE]: Do NOT output JSON state blocks. Keep responses atmospheric, purely narrative, and very concise. Use evocative language fit for a master storyteller.";
 
             const sessionPromise = ai.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -59,19 +69,16 @@ class LiveClient {
                 },
                 callbacks: {
                     onopen: () => {
-                        console.log("Gemini Live Connected");
+                        console.log("Live connection established");
                         this.onStatusChange?.(true);
                         
-                        // Start Audio Input Stream
                         if (!this.inputAudioContext) return;
                         
                         this.inputSource = this.inputAudioContext.createMediaStreamSource(stream);
                         this.processor = this.inputAudioContext.createScriptProcessor(BUFFER_SIZE, 1, 1);
                         
                         this.processor.onaudioprocess = (e) => {
-                            // Check mute state before sending audio
                             if (this.isMuted) return;
-
                             const inputData = e.inputBuffer.getChannelData(0);
                             const pcmBlob = this.createBlob(inputData);
                             sessionPromise.then(session => {
@@ -83,34 +90,26 @@ class LiveClient {
                         this.processor.connect(this.inputAudioContext.destination);
                     },
                     onmessage: async (msg: LiveServerMessage) => {
-                        // Handle Audio Output
                         const audioData = msg.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
                         if (audioData && this.outputAudioContext && this.outputNode) {
                             await this.playAudioChunk(audioData);
                         }
 
-                        // Handle Transcription
                         const transcript = msg.serverContent?.outputTranscription?.text;
                         if (transcript && this.onMessage) {
                             this.onMessage(transcript);
                         }
 
-                        // Handle Turn Completion (optional logic here)
-                        if (msg.serverContent?.turnComplete) {
-                            // Can trigger UI updates
-                        }
-                        
-                        // Handle Interruption
                         if (msg.serverContent?.interrupted) {
                             this.stopAudioPlayback();
                         }
                     },
                     onclose: () => {
-                        console.log("Gemini Live Closed");
+                        console.log("Live connection closed");
                         this.disconnect();
                     },
                     onerror: (err) => {
-                        console.error("Gemini Live Error", err);
+                        console.error("Live session error", err);
                         this.disconnect();
                     }
                 }
@@ -119,7 +118,7 @@ class LiveClient {
             this.session = await sessionPromise;
 
         } catch (error) {
-            console.error("Failed to connect to Gemini Live:", error);
+            console.error("Gemini Live connection failure:", error);
             this.disconnect();
             throw error;
         }
@@ -127,47 +126,43 @@ class LiveClient {
 
     disconnect() {
         if (this.session) {
-            this.session.close(); // Assuming close method exists or we just drop ref
+            try { this.session.close(); } catch(e) {}
             this.session = null;
         }
 
-        // Stop Input
         if (this.inputSource) {
-            this.inputSource.disconnect();
-            this.inputSource.mediaStream.getTracks().forEach(track => track.stop());
+            try {
+                this.inputSource.disconnect();
+                this.inputSource.mediaStream.getTracks().forEach(track => track.stop());
+            } catch(e) {}
             this.inputSource = null;
         }
         if (this.processor) {
-            this.processor.disconnect();
+            try { this.processor.disconnect(); } catch(e) {}
             this.processor = null;
         }
         if (this.inputAudioContext) {
-            this.inputAudioContext.close();
+            try { this.inputAudioContext.close(); } catch(e) {}
             this.inputAudioContext = null;
         }
 
-        // Stop Output
         this.stopAudioPlayback();
         if (this.outputAudioContext) {
-            this.outputAudioContext.close();
+            try { this.outputAudioContext.close(); } catch(e) {}
             this.outputAudioContext = null;
         }
 
-        this.isMuted = false; // Reset mute state
+        this.isMuted = false; 
         this.onStatusChange?.(false);
     }
 
     private createBlob(data: Float32Array): Blob {
-        const l = data.length;
-        const int16 = new Int16Array(l);
-        for (let i = 0; i < l; i++) {
+        const int16 = new Int16Array(data.length);
+        for (let i = 0; i < data.length; i++) {
             int16[i] = Math.max(-32768, Math.min(32767, data[i] * 32768));
         }
-        const uint8 = new Uint8Array(int16.buffer);
-        const base64 = this.arrayBufferToBase64(uint8);
-        
         return {
-            data: base64,
+            data: this.arrayBufferToBase64(new Uint8Array(int16.buffer)),
             mimeType: `audio/pcm;rate=${INPUT_SAMPLE_RATE}`,
         };
     }
@@ -178,14 +173,11 @@ class LiveClient {
         try {
             const arrayBuffer = this.base64ToArrayBuffer(base64);
             const audioBuffer = await this.decodeAudioData(arrayBuffer, this.outputAudioContext);
-            
-            // Schedule playback
             this.nextStartTime = Math.max(this.outputAudioContext.currentTime, this.nextStartTime);
             
             const source = this.outputAudioContext.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(this.outputNode);
-            
             source.start(this.nextStartTime);
             this.nextStartTime += audioBuffer.duration;
             
@@ -204,12 +196,9 @@ class LiveClient {
         this.nextStartTime = 0;
     }
 
-    // --- Helpers ---
-
     private arrayBufferToBase64(buffer: Uint8Array): string {
         let binary = '';
-        const len = buffer.byteLength;
-        for (let i = 0; i < len; i++) {
+        for (let i = 0; i < buffer.byteLength; i++) {
             binary += String.fromCharCode(buffer[i]);
         }
         return window.btoa(binary);
@@ -217,23 +206,19 @@ class LiveClient {
 
     private base64ToArrayBuffer(base64: string): Uint8Array {
         const binaryString = window.atob(base64);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
         }
         return bytes;
     }
 
     private async decodeAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
-        // Raw PCM decoding (1 channel, 16-bit, 24kHz)
         const int16Data = new Int16Array(data.buffer);
         const float32Data = new Float32Array(int16Data.length);
-        
         for (let i = 0; i < int16Data.length; i++) {
             float32Data[i] = int16Data[i] / 32768.0;
         }
-
         const buffer = ctx.createBuffer(1, float32Data.length, OUTPUT_SAMPLE_RATE);
         buffer.copyToChannel(float32Data, 0);
         return buffer;

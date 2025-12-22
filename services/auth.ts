@@ -15,20 +15,20 @@ import { auth } from './firebase';
 
 export interface User {
   uid: string;
-  email: string | null;
-  displayName: string | null;
-  photoURL?: string | null;
+  email: string | undefined;
+  displayName: string | undefined;
+  photoURL?: string | undefined;
   isAnonymous?: boolean;
 }
 
 // Map Firebase user to our internal User interface
-const mapUser = (firebaseUser: FirebaseUser | null): User | null => {
-  if (!firebaseUser) return null;
+const mapUser = (firebaseUser: FirebaseUser | null): User | undefined => {
+  if (!firebaseUser) return undefined;
   return {
     uid: firebaseUser.uid,
-    email: firebaseUser.email,
+    email: firebaseUser.email || undefined,
     displayName: firebaseUser.displayName || (firebaseUser.isAnonymous ? 'Guest Traveler' : firebaseUser.email?.split('@')[0]) || 'Unknown Hero',
-    photoURL: firebaseUser.photoURL,
+    photoURL: firebaseUser.photoURL || undefined,
     isAnonymous: firebaseUser.isAnonymous
   };
 };
@@ -109,11 +109,11 @@ export const authService = {
     }
   },
 
-  onAuthStateChange: (callback: (user: User | null) => void) => {
+  onAuthStateChange: (callback: (user: User | undefined) => void) => {
     if (!auth) {
         // If auth is not configured, we just return a dummy unsubscribe function
-        // and call callback(null) immediately so the app treats it as logged out
-        callback(null);
+        // and call callback(undefined) immediately so the app treats it as logged out
+        callback(undefined);
         return () => {};
     }
     return onAuthStateChanged(auth, (firebaseUser) => {
@@ -121,8 +121,8 @@ export const authService = {
     });
   },
 
-  getCurrentUser: (): User | null => {
-    if (!auth) return null;
+  getCurrentUser: (): User | undefined => {
+    if (!auth) return undefined;
     return mapUser(auth.currentUser);
   }
 };

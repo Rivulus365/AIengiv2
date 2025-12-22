@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Sword, Scroll, Zap, Sparkles, Lock, ArrowRight, Mail, AlertCircle, AlertTriangle, ArrowLeft, Send, User as UserIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sword, Scroll, Zap, Sparkles, Lock, ArrowRight, Mail, AlertCircle, ArrowLeft, User as UserIcon, Key } from 'lucide-react';
 import { authService } from '../services/auth';
 import { isFirebaseConfigured } from '../services/firebase';
 import { useGameStore } from '../store/gameStore';
@@ -40,8 +40,6 @@ const FallbackLogo = ({ variant }: { variant: LogoVariant }) => (
 
 const Logo: React.FC<{ className?: string, variant?: LogoVariant }> = ({ className = "", variant = 'nav' }) => {
     const [error, setError] = useState(false);
-
-    // Use the remote banner URL if available, otherwise rely on fallback
     const logoSrc = BANNER_URL;
 
     if (error) {
@@ -67,19 +65,47 @@ const LandingPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string>('');
+  const [resetSuccess, setResetSuccess] = useState<string>('');
+  
+  // Check if API key is already present in env vars, otherwise check for user selection
+  const [apiKeySelected, setApiKeySelected] = useState(!!process.env.API_KEY);
+
+  useEffect(() => {
+    const checkKey = async () => {
+        // If key is in env vars, we are set
+        if (process.env.API_KEY) return;
+
+        if (window.aistudio) {
+            const selected = await window.aistudio.hasSelectedApiKey();
+            setApiKeySelected(selected);
+        }
+    };
+    checkKey();
+  }, []);
+
+  const handleOpenKeyDialog = async () => {
+    if (window.aistudio) {
+        await window.aistudio.openSelectKey();
+        // Guidelines specify assuming success and proceeding to mitigate race conditions
+        setApiKeySelected(true);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!apiKeySelected) {
+        setError("Please select a valid paid Gemini API key before entering the realm.");
+        return;
+    }
     if (!isFirebaseConfigured) {
         setError("System Error: Firebase configuration invalid.");
         return;
     }
 
     setLoading(true);
-    setError(null);
-    setResetSuccess(null);
+    setError('');
+    setResetSuccess('');
     
     try {
         if (isLogin) {
@@ -106,56 +132,25 @@ const LandingPage: React.FC = () => {
     }
   };
 
-  const handlePasswordReset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) {
-        setError("Please enter your email address.");
+  const handleGoogleLogin = async () => {
+    if (!apiKeySelected) {
+        setError("Please select a valid paid Gemini API key before entering the realm.");
         return;
     }
-    
-    setLoading(true);
-    setError(null);
-    setResetSuccess(null);
-
-    try {
-        await authService.resetPassword(email);
-        setResetSuccess("Password reset link sent! Check your inbox.");
-    } catch (err: any) {
-        console.error("Reset error:", err);
-        let msg = "Failed to send reset email.";
-        if (err.code === 'auth/user-not-found') {
-            msg = "No account found with this email.";
-        } else if (err.code === 'auth/invalid-email') {
-            msg = "Invalid email address.";
-        }
-        setError(msg);
-    } finally {
-        setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
     if (!isFirebaseConfigured) {
         setError("System Error: Firebase API Key missing.");
         return;
     }
 
     setLoading(true);
-    setError(null);
+    setError('');
     try {
         await authService.loginWithGoogle();
-        // Successful login will trigger the onAuthStateChange in App.tsx
     } catch (err: any) {
         console.error("Google Auth error:", err);
         let msg = "Failed to sign in with Google.";
         if (err.code === 'auth/popup-closed-by-user') {
             msg = "Sign in cancelled.";
-        } else if (err.code === 'auth/configuration-not-found') {
-            msg = "Google Auth not enabled in project settings.";
-        } else if (err.code === 'auth/invalid-api-key') {
-            msg = "Invalid API Key configuration.";
-        } else if (err.code === 'auth/unauthorized-domain') {
-            msg = `Domain unauthorized (${window.location.hostname}). Add this domain to Firebase Console > Auth > Settings > Authorized Domains.`;
         } else if (err.message) {
             msg = err.message;
         }
@@ -166,22 +161,22 @@ const LandingPage: React.FC = () => {
   };
 
   const handleGuestLogin = async () => {
+    if (!apiKeySelected) {
+        setError("Please select a valid paid Gemini API key before entering the realm.");
+        return;
+    }
     setLoading(true);
-    setError(null);
+    setError('');
     try {
-        // Attempt robust Firebase Anonymous Auth first
         if (isFirebaseConfigured) {
             try {
                 await authService.loginAnonymously();
-                return; // Auth state change will handle the rest
+                return; 
             } catch (err: any) {
                 console.warn("Firebase Anonymous Auth failed, falling back to local guest.", err);
-                // Fallthrough to local handling if Firebase fails (e.g. not enabled in console)
             }
         }
 
-        // Local Guest Fallback (For offline / no-firebase-config scenarios)
-        // We use localStorage to ensure the 'Guest' ID persists across refreshes so they don't lose save data immediately
         let guestId = localStorage.getItem('ia_guest_id');
         if (!guestId) {
             guestId = `guest_${crypto.randomUUID()}`;
@@ -227,7 +222,7 @@ const LandingPage: React.FC = () => {
         {/* Left Column: Hero Content */}
         <div className="flex-1 space-y-8 animate-in slide-in-from-left duration-700">
             <div className="inline-block bg-amber-900/20 border border-amber-900/40 rounded-full px-4 py-1.5 text-xs text-amber-500 font-display tracking-widest uppercase mb-2">
-                Powered by Gemini 2.5
+                Powered by Gemini 3.0
             </div>
             
             {/* Hero Logo Placement */}
@@ -245,49 +240,56 @@ const LandingPage: React.FC = () => {
                 Full D&D 5e mechanics, tactical combat, and generative visual scenes driven by state-of-the-art AI.
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                {[
-                    { icon: Sparkles, title: "Generative AI", desc: "Unique stories & visuals every turn" },
-                    { icon: Zap, title: "Deep Mechanics", desc: "D20 rolls, Stats, Inventory & Loot" },
-                    { icon: Scroll, title: "Dynamic World", desc: "NPCs and Quests that react to you" },
-                    { icon: Lock, title: "Local Save", desc: "Your progress is synced to browser" }
-                ].map((feature, i) => (
-                    <div key={i} className="flex items-start gap-3 p-4 bg-[#1c1917]/50 border border-[#292524] rounded-lg hover:border-amber-900/30 transition-colors">
-                        <feature.icon className="w-5 h-5 text-amber-600 mt-1" />
-                        <div>
-                            <h3 className="font-bold text-stone-200 text-sm">{feature.title}</h3>
-                            <p className="text-xs text-stone-500 leading-tight mt-1">{feature.desc}</p>
-                        </div>
+            {!apiKeySelected ? (
+                <div className="p-6 bg-[#1c1917] border border-amber-900/30 rounded-xl space-y-4 animate-slide-up max-w-md">
+                    <div className="flex items-center gap-3 text-amber-500 mb-2">
+                        <Key className="w-6 h-6" />
+                        <h2 className="text-xl font-display font-bold">API Key Selection</h2>
                     </div>
-                ))}
-            </div>
+                    <p className="text-sm text-stone-400 leading-relaxed">
+                        To access high-quality generative features, you must select your own paid API key from Google AI Studio. 
+                        This ensures a premium experience without limits.
+                    </p>
+                    <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-xs text-amber-600 hover:text-amber-400 transition-colors block underline">
+                        View Billing Documentation
+                    </a>
+                    <Button onClick={handleOpenKeyDialog} variant="primary" className="w-full mt-2" leftIcon={<Sparkles className="w-4 h-4" />}>
+                        Select API Key
+                    </Button>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 animate-in fade-in duration-500">
+                    {[
+                        { icon: Sparkles, title: "Generative AI", desc: "Unique stories & visuals every turn" },
+                        { icon: Zap, title: "Deep Mechanics", desc: "D20 rolls, Stats, Inventory & Loot" },
+                        { icon: Scroll, title: "Dynamic World", desc: "NPCs and Quests that react to you" },
+                        { icon: Lock, title: "Local Save", desc: "Your progress is synced to browser" }
+                    ].map((feature, i) => (
+                        <div key={i} className="flex items-start gap-3 p-4 bg-[#1c1917]/50 border border-[#292524] rounded-lg hover:border-amber-900/30 transition-colors">
+                            <feature.icon className="w-5 h-5 text-amber-600 mt-1" />
+                            <div>
+                                <h3 className="font-bold text-stone-200 text-sm">{feature.title}</h3>
+                                <p className="text-xs text-stone-500 leading-tight mt-1">{feature.desc}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
 
         {/* Right Column: Auth Form */}
-        <div className="w-full max-w-md animate-in slide-in-from-right duration-700 delay-200">
+        <div className={`w-full max-w-md animate-in slide-in-from-right duration-700 delay-200 ${!apiKeySelected ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
             <div className="bg-[#1c1917] border border-[#292524] p-8 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden group">
-                {/* Glow Effect */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.5)] group-hover:w-48 transition-all duration-700"></div>
 
                 <div className="text-center mb-6">
                     <h2 className="text-2xl font-display font-bold text-stone-100">
-                        {isForgotPassword 
-                            ? 'Account Recovery' 
-                            : (isLogin ? 'Welcome Back' : 'Create Account')}
+                        {isForgotPassword ? 'Account Recovery' : (isLogin ? 'Welcome Back' : 'Create Account')}
                     </h2>
                     <p className="text-stone-500 text-sm mt-2">
-                        {isForgotPassword 
-                            ? 'Recover access to your adventure.' 
-                            : (isLogin ? 'Enter the realm and resume your journey.' : 'Begin your legend today.')}
+                        {isLogin ? 'Enter the realm and resume your journey.' : 'Begin your legend today.'}
                     </p>
                 </div>
-
-                {!isFirebaseConfigured && (
-                    <div className="mb-4 p-3 bg-red-950/50 border border-red-900 rounded flex items-start gap-2 text-red-200 text-xs">
-                        <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
-                        <p>Missing valid Firebase Configuration. The provided API key may be incorrect or missing.</p>
-                    </div>
-                )}
 
                 {error && (
                     <div className="mb-4 p-3 bg-red-950/30 border border-red-900/50 rounded flex items-start gap-2 text-red-400 text-xs animate-in slide-in-from-top-2">
@@ -296,155 +298,52 @@ const LandingPage: React.FC = () => {
                     </div>
                 )}
 
-                {resetSuccess && (
-                    <div className="mb-4 p-3 bg-emerald-950/30 border border-emerald-900/50 rounded flex items-start gap-2 text-emerald-400 text-xs animate-in slide-in-from-top-2">
-                        <Sparkles className="w-4 h-4 shrink-0" />
-                        <p>{resetSuccess}</p>
+                <button
+                    onClick={handleGoogleLogin}
+                    disabled={loading || !isFirebaseConfigured}
+                    className="w-full bg-white hover:bg-stone-100 text-stone-900 py-3 rounded border border-stone-300 transition-all flex items-center justify-center gap-3 mb-3 group shadow-md"
+                >
+                    <GoogleIcon />
+                    <span className="text-sm font-bold">Sign in with Google</span>
+                </button>
+
+                <button
+                    onClick={handleGuestLogin}
+                    className="w-full bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-stone-200 py-3 rounded border border-stone-800 hover:border-stone-600 transition-all flex items-center justify-center gap-3 mb-4 group"
+                >
+                    <UserIcon className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase tracking-wide">Continue as Guest</span>
+                </button>
+
+                <div className="relative mb-4">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#292524]"></div></div>
+                    <div className="relative flex justify-center text-xs"><span className="px-2 bg-[#1c1917] text-stone-500 uppercase tracking-widest">Or continue with email</span></div>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4 animate-in fade-in duration-300">
+                    <div className="relative">
+                        <Mail className="absolute left-3 top-3 w-5 h-5 text-stone-600" />
+                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 p-3 pl-10 rounded focus:border-amber-700/50 transition-colors outline-none" placeholder="Email" required />
                     </div>
-                )}
+                    <div className="relative">
+                        <Lock className="absolute left-3 top-3 w-5 h-5 text-stone-600" />
+                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 p-3 pl-10 rounded focus:border-amber-700/50 transition-colors outline-none" placeholder="Password" required />
+                    </div>
+                    <Button type="submit" variant="primary" className="w-full mt-2" isLoading={loading}>{isLogin ? 'Login' : 'Sign Up'}</Button>
+                </form>
 
-                {/* FORGOT PASSWORD FORM */}
-                {isForgotPassword ? (
-                    <form onSubmit={handlePasswordReset} className="space-y-4 animate-in fade-in slide-in-from-right duration-300">
-                        <div className="space-y-1">
-                            <label className="text-xs text-stone-500 uppercase tracking-widest font-bold ml-1">Email Address</label>
-                            <div className="relative">
-                                <Mail className="absolute left-3 top-3 w-5 h-5 text-stone-600" />
-                                <input 
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 p-3 pl-10 rounded focus:outline-none focus:border-amber-700/50 transition-colors"
-                                    placeholder="hero@realm.com"
-                                    required
-                                    autoFocus
-                                />
-                            </div>
-                        </div>
-
-                        <Button 
-                            type="submit"
-                            variant="primary"
-                            isLoading={loading}
-                            disabled={!isFirebaseConfigured}
-                            className="w-full"
-                            rightIcon={<Send className="w-4 h-4" />}
-                        >
-                            Send Reset Link
-                        </Button>
-
-                        <button 
-                            type="button"
-                            onClick={() => { setIsForgotPassword(false); setError(null); setResetSuccess(null); }}
-                            className="w-full text-xs text-stone-500 hover:text-stone-300 py-2 flex items-center justify-center gap-2 transition-colors"
-                        >
-                            <ArrowLeft className="w-3 h-3" /> Back to Login
-                        </button>
-                    </form>
-                ) : (
-                    /* LOGIN / SIGNUP FORM */
-                    <>
-                        {/* Google Sign In */}
-                        <button
-                            onClick={handleGoogleLogin}
-                            disabled={loading || !isFirebaseConfigured}
-                            className="w-full bg-white hover:bg-stone-100 text-stone-900 py-3 rounded border border-stone-300 transition-all flex items-center justify-center gap-3 mb-3 group shadow-md disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg font-sans"
-                        >
-                            {loading && error === null ? <div className="w-5 h-5 border-2 border-stone-400 border-t-stone-800 rounded-full animate-spin"></div> : <GoogleIcon />}
-                            <span className="text-sm font-bold">Sign in with Google</span>
-                        </button>
-
-                        {/* Guest Mode */}
-                        <button
-                            onClick={handleGuestLogin}
-                            disabled={loading}
-                            className="w-full bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-stone-200 py-3 rounded border border-stone-800 hover:border-stone-600 transition-all flex items-center justify-center gap-3 mb-4 group disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <UserIcon className="w-4 h-4 group-hover:text-stone-100 transition-colors" />
-                            <span className="text-xs font-bold uppercase tracking-wide">Continue as Guest</span>
-                        </button>
-
-                        <div className="relative mb-4">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-[#292524]"></div>
-                            </div>
-                            <div className="relative flex justify-center text-xs">
-                                <span className="px-2 bg-[#1c1917] text-stone-500 uppercase tracking-widest">Or continue with email</span>
-                            </div>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="space-y-4 animate-in fade-in duration-300">
-                            <div className="space-y-1">
-                                <label className="text-xs text-stone-500 uppercase tracking-widest font-bold ml-1">Email</label>
-                                <div className="relative">
-                                    <Mail className="absolute left-3 top-3 w-5 h-5 text-stone-600" />
-                                    <input 
-                                        type="email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 p-3 pl-10 rounded focus:outline-none focus:border-amber-700/50 transition-colors"
-                                        placeholder="hero@realm.com"
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-1">
-                                <div className="flex justify-between items-baseline">
-                                    <label className="text-xs text-stone-500 uppercase tracking-widest font-bold ml-1">Password</label>
-                                    {isLogin && (
-                                        <button 
-                                            type="button"
-                                            onClick={() => { setIsForgotPassword(true); setError(null); setResetSuccess(null); }}
-                                            className="text-[10px] text-amber-600 hover:text-amber-400 transition-colors"
-                                        >
-                                            Forgot Password?
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="relative">
-                                    <Lock className="absolute left-3 top-3 w-5 h-5 text-stone-600" />
-                                    <input 
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        className="w-full bg-[#0c0a09] border border-[#292524] text-stone-200 p-3 pl-10 rounded focus:outline-none focus:border-amber-700/50 transition-colors"
-                                        placeholder="••••••••"
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <Button 
-                                type="submit"
-                                variant="primary"
-                                isLoading={loading && !error && error !== null}
-                                disabled={!isFirebaseConfigured}
-                                className="w-full mt-6"
-                                rightIcon={<ArrowRight className="w-4 h-4" />}
-                            >
-                                {isLogin ? 'Login' : 'Sign Up'}
-                            </Button>
-                        </form>
-
-                        <div className="mt-6 text-center">
-                            <button 
-                                type="button"
-                                onClick={() => { setError(null); setIsLogin(!isLogin); setResetSuccess(null); }}
-                                className="text-xs text-stone-500 hover:text-amber-500 transition-colors underline decoration-stone-700 hover:decoration-amber-500"
-                            >
-                                {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Login"}
-                            </button>
-                        </div>
-                    </>
-                )}
+                <div className="mt-6 text-center">
+                    <button onClick={() => setIsLogin(!isLogin)} className="text-xs text-stone-500 hover:text-amber-500 transition-colors underline decoration-stone-700">
+                        {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Login"}
+                    </button>
+                </div>
             </div>
         </div>
       </main>
 
       <footer className="relative z-20 border-t border-[#292524] p-6 text-center">
         <p className="text-[10px] text-stone-600 uppercase tracking-widest">
-            © 2023 Infinite Adventure Engine • Powered by Gemini
+            © 2024 Infinite Adventure Engine • Powered by Gemini
         </p>
       </footer>
 

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, Suspense, lazy, useRef } from 'react';
-import { User, authService } from './services/auth';
+import { authService } from './services/auth';
 import { audioService } from './services/audio';
-import { Menu, X, Settings, AlertOctagon, LogOut, Loader2, Volume2, VolumeX } from 'lucide-react';
+import { Menu, X, Settings, LogOut, Loader2 } from 'lucide-react';
 import { useGameStore } from './store/gameStore';
 import ToastContainer from './components/ToastContainer';
 import { NoiseTexture } from './components/VisualAssets';
@@ -45,6 +45,7 @@ const App: React.FC = () => {
     useEffect(() => {
         // Subscribe to Auth state
         const unsubscribe = authService.onAuthStateChange(async (currentUser) => {
+            // currentUser is now User | undefined
             await setUser(currentUser);
             setLoadingAuth(false);
         });
@@ -104,7 +105,7 @@ const App: React.FC = () => {
     // --- Render ---
     if (loadingAuth) return <LoadingScreen />;
     
-    // Unauthenticated View
+    // Unauthenticated View - user is undefined here if not logged in
     if (!user) {
         return (
             <Suspense fallback={<LoadingScreen />}>
@@ -125,13 +126,6 @@ const App: React.FC = () => {
                 {/* Damage Overlay */}
                 <div className={`absolute inset-0 transition-opacity duration-300 ${screenShake ? 'opacity-100' : 'opacity-0'} bg-[radial-gradient(circle_at_center,transparent_0%,rgba(153,27,27,0.4)_100%)] mix-blend-overlay`}></div>
             </div>
-
-            {/* --- System Alerts --- */}
-            {!process.env.API_KEY && (
-                <div className="relative z-[100] bg-red-900/90 text-white text-center p-2 text-xs font-bold flex items-center justify-center gap-2 backdrop-blur-sm" role="alert">
-                    <AlertOctagon className="w-4 h-4" /> CRITICAL ERROR: No Gemini API Key Found.
-                </div>
-            )}
 
             {/* --- Top Navigation Bar (Glass) --- */}
             <header className="relative z-50 h-14 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-black/20 backdrop-blur-md">

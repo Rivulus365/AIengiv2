@@ -1,3 +1,4 @@
+
 import { GameState } from '../types';
 
 const cleanJson = (jsonString: string): string => {
@@ -15,7 +16,7 @@ const cleanJson = (jsonString: string): string => {
     return clean;
 };
 
-export const extractGameState = (text: string): { cleanedText: string; gameState: GameState | null } => {
+export const extractGameState = (text: string): { cleanedText: string; gameState: GameState | undefined } => {
   // Regex to find the JSON block inside ```json ... ``` or just ``` ... ```
   // We use the 'g' flag to find ALL matches to prevent "Prompt Injection" attacks
   const jsonBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/g;
@@ -42,6 +43,6 @@ export const extractGameState = (text: string): { cleanedText: string; gameState
     }
   }
 
-  // Fallback: If no valid JSON block found, return original text and null state
-  return { cleanedText: text, gameState: null };
+  // Fallback: If no valid JSON block found, return original text and undefined state
+  return { cleanedText: text, gameState: undefined };
 };

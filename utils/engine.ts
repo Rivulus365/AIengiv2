@@ -33,14 +33,16 @@ export const calculateMaxHp = (charClass: string, conScore: number, level: numbe
 export const calculateDerivedStats = (
     stats: BaseStats, 
     charClass: string, 
-    level: number, 
-    proficiencyBonus: number = 2
+    level: number
 ): DerivedStats => {
     const strMod = getModifier(stats.str);
     const dexMod = getModifier(stats.dex);
     const intMod = getModifier(stats.int);
     const wisMod = getModifier(stats.wis);
     const chaMod = getModifier(stats.cha);
+    
+    // Proficiency Bonus: +2 at lvl 1, +3 at lvl 5, +4 at lvl 9...
+    const proficiencyBonus = Math.ceil(level / 4) + 1;
 
     const ac = 10 + dexMod; // Base Unarmored AC
     const initiative = dexMod;

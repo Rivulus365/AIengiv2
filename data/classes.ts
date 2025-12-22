@@ -1,3 +1,4 @@
+
 import { ClassDefinition } from '../types';
 
 export const CLASS_DEFINITIONS: Record<string, ClassDefinition> = {
@@ -78,7 +79,7 @@ export const CLASS_DEFINITIONS: Record<string, ClassDefinition> = {
     },
     Cleric: {
         name: "Cleric",
-        description: "A priestly champion.",
+        description: "A priestly champion who wields divine magic in service of a higher power.",
         statBonuses: { wis: 2, str: 1 },
         resources: {
             spellSlots: { current: 2, max: 2 },
@@ -89,15 +90,21 @@ export const CLASS_DEFINITIONS: Record<string, ClassDefinition> = {
         subclasses: {
             Life: {
                 name: "Life Domain",
-                description: "Dedicated to healing and vitality.",
+                description: "Dedicated to the vibrant positive energy that sustains all life.",
                 features: ["Disciple of Life"],
                 statBonuses: { wis: 1 }
             },
+            Light: {
+                name: "Light Domain",
+                description: "Overwhelms darkness and undead with the searing power of the sun.",
+                features: ["Warding Flare", "Radiance of the Dawn"],
+                statBonuses: { wis: 1, int: 1 }
+            },
             War: {
                 name: "War Domain",
-                description: "Combines divine magic with martial prowess.",
-                features: ["War Priest"],
-                statBonuses: { str: 1 }
+                description: "Excels in battle, combining physical prowess with divine fury.",
+                features: ["War Priest", "Guided Strike"],
+                statBonuses: { str: 1, con: 1 }
             }
         }
     },

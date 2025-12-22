@@ -2,11 +2,11 @@
 export type AmbientType = 'dungeon' | 'forest' | 'town' | 'none';
 
 class AudioService {
-  private ctx: AudioContext | null = null;
-  private currentSource: AudioBufferSourceNode | null = null;
-  private currentNarrationSource: AudioBufferSourceNode | null = null;
-  private gainNode: GainNode | null = null;
-  private narrationGainNode: GainNode | null = null;
+  private ctx: AudioContext | undefined;
+  private currentSource: AudioBufferSourceNode | undefined;
+  private currentNarrationSource: AudioBufferSourceNode | undefined;
+  private gainNode: GainNode | undefined;
+  private narrationGainNode: GainNode | undefined;
   private currentType: AmbientType = 'none';
   private isSoundEnabled: boolean = true;
   
@@ -19,7 +19,7 @@ class AudioService {
       if (AudioContextClass) {
         this.ctx = new AudioContextClass({ sampleRate: 24000 }); // Optimization for TTS
         
-        // Ambient/SFX track gain
+        // Ambient/SFX track track gain
         this.gainNode = this.ctx.createGain();
         this.gainNode.gain.value = this.isSoundEnabled ? 0.05 : 0;
         this.gainNode.connect(this.ctx.destination);
@@ -46,7 +46,7 @@ class AudioService {
       }
   }
 
-  private getCachedBuffer(key: string, generator: () => AudioBuffer | null): AudioBuffer | null {
+  private getCachedBuffer(key: string, generator: () => AudioBuffer | undefined): AudioBuffer | undefined {
     if (this.bufferCache.has(key)) {
         return this.bufferCache.get(key)!;
     }
@@ -57,8 +57,8 @@ class AudioService {
     return buffer;
   }
 
-  private createNoiseBuffer(): AudioBuffer | null {
-    if (!this.ctx) return null;
+  private createNoiseBuffer(): AudioBuffer | undefined {
+    if (!this.ctx) return undefined;
     const bufferSize = this.ctx.sampleRate * 5; // 5 seconds loop
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -80,8 +80,8 @@ class AudioService {
     return buffer;
   }
 
-  private createRumbleBuffer(): AudioBuffer | null {
-    if (!this.ctx) return null;
+  private createRumbleBuffer(): AudioBuffer | undefined {
+    if (!this.ctx) return undefined;
     const bufferSize = this.ctx.sampleRate * 2;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -98,13 +98,11 @@ class AudioService {
     if (this.gainNode && this.ctx) {
       // Smooth ramp to avoid clicking
       const targetVol = enabled ? 0.05 : 0;
-      // Defensive check for gain node existence
       if (this.gainNode.gain) {
         this.gainNode.gain.setTargetAtTime(targetVol, this.ctx.currentTime || 0, 0.2);
       }
     }
 
-    // Ensure context is running if we enabled sound
     if (enabled) {
         this.resume();
     }
@@ -161,12 +159,10 @@ class AudioService {
 
     source.start();
     this.currentSource = source;
-    
-    // Auto-resume if we try to play
     this.resume();
   }
 
-  public playOneShot(type: 'dice_roll' | 'crit' | 'fail') {
+  public playOneShot(type: 'dice_roll' | 'crit' | 'fail', variant?: number) {
     if (!this.isSoundEnabled) return;
     this.init();
     if (!this.ctx || !this.gainNode) return;
@@ -182,10 +178,12 @@ class AudioService {
 
     try {
         if (type === 'dice_roll') {
+          // Add frequency variety for distinct sounds during multi-rolls
+          const baseFreq = variant ? 150 + (variant % 100) : 200 + (Math.random() * 100 - 50);
           osc.type = 'triangle';
-          osc.frequency.setValueAtTime(200, now);
-          osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
-          gain.gain.setValueAtTime(0.05, now);
+          osc.frequency.setValueAtTime(baseFreq, now);
+          osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, now + 0.05);
+          gain.gain.setValueAtTime(0.04, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
           osc.start();
           osc.stop(now + 0.05);
@@ -222,9 +220,6 @@ class AudioService {
     if (!this.isSoundEnabled) return;
     this.init();
     if (!this.ctx || !this.gainNode) return;
-    
-    // UI sounds shouldn't aggressively resume context if suspended by system, 
-    // but usually they happen on click, so it's fine.
     if (this.ctx.state === 'suspended') this.ctx.resume();
 
     const osc = this.ctx.createOscillator();
@@ -257,19 +252,12 @@ class AudioService {
   }
 
   public async playPCM(base64Data: string) {
-    // Narrator ignores isSoundEnabled flag, controlled by Store instead.
     this.init();
-    
-    // FORCE resume for narration
     await this.resume();
-
     if (!this.ctx || !this.narrationGainNode) return;
-    
-    // Stop previous narration if active
     if (this.currentNarrationSource) {
         try { this.currentNarrationSource.stop(); } catch(e) {}
     }
-
     try {
         const binaryString = atob(base64Data);
         const len = binaryString.length;
@@ -277,17 +265,13 @@ class AudioService {
         for (let i = 0; i < len; i++) {
             bytes[i] = binaryString.charCodeAt(i);
         }
-
-        // Convert raw PCM (16-bit, 24kHz, mono) to AudioBuffer
         const int16Data = new Int16Array(bytes.buffer);
         const float32Data = new Float32Array(int16Data.length);
         for (let i = 0; i < int16Data.length; i++) {
             float32Data[i] = int16Data[i] / 32768.0;
         }
-
         const audioBuffer = this.ctx.createBuffer(1, float32Data.length, 24000);
         audioBuffer.copyToChannel(float32Data, 0);
-
         const source = this.ctx.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(this.narrationGainNode);
@@ -300,14 +284,11 @@ class AudioService {
 
   public updateAmbientBasedOnLocation(location: string) {
     if (!this.isSoundEnabled) return;
-    
     const loc = location.toLowerCase();
     let ambient: AmbientType = 'none';
-
     if (loc.match(/(dungeon|cave|crypt|mine|underdark)/)) ambient = 'dungeon';
     else if (loc.match(/(forest|woods|wild|jungle|swamp)/)) ambient = 'forest';
     else if (loc.match(/(town|city|tavern|village|castle)/)) ambient = 'town';
-
     this.playAmbient(ambient);
   }
 }
