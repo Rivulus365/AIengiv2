@@ -1,3 +1,4 @@
+
 import { Item } from '../types';
 
 export const ITEM_LIBRARY: Record<string, Item> = {
@@ -42,6 +43,7 @@ export const ITEM_LIBRARY: Record<string, Item> = {
     "Vicious Weapon": { name: "Vicious Weapon", dmg: "1d8", type: "melee", weight: 3, value: 350, rarity: "uncommon", description: "Deals +7 damage on a 20.", effect: "+7 on Crit" },
     "Oathbow": { name: "Oathbow", dmg: "1d8", type: "ranged", weight: 2, value: 3500, rarity: "rare", description: "Sworn enemy takes +3d6 damage.", effect: "+3d6 vs Sworn Enemy" },
     "Dagger of Venom": { name: "Dagger of Venom", dmg: "1d4", type: "melee", weight: 1, value: 2500, rarity: "rare", description: "Coated in poison (+2d10 poison).", effect: "+2d10 Poison" },
+    "Javelin of Lightning": { name: "Javelin of Lightning", dmg: "1d6", type: "ranged", weight: 2, value: 500, rarity: "uncommon", description: "Transforms into a lightning bolt (4d6) when thrown.", effect: "Lightning Bolt" },
 
     // Magic Weapons - Epic/Legendary
     "Weapon +2": { name: "Weapon +2", dmg: "1d8+2", type: "melee", weight: 3, value: 2000, rarity: "rare", description: "A weapon with a +2 bonus.", effect: "+2 Attack/Damage" },
@@ -50,6 +52,8 @@ export const ITEM_LIBRARY: Record<string, Item> = {
     "Holy Avenger": { name: "Holy Avenger", dmg: "1d8+3", type: "melee", weight: 3, value: 50000, rarity: "legendary", description: "Sacred weapon (+2d10 vs fiends/undead).", effect: "+3, +2d10 vs Evil" },
     "Sword of Sharpness": { name: "Sword of Sharpness", dmg: "1d8", type: "melee", weight: 3, value: 8000, rarity: "epic", description: "Maximizes damage on 20, severs limbs.", effect: "Max dmg on 20" },
     "Defender": { name: "Defender", dmg: "1d8+3", type: "melee", weight: 3, value: 15000, rarity: "legendary", description: "Transfer bonus to AC.", effect: "+3, Bonus to AC" },
+    "Sun Blade": { name: "Sun Blade", dmg: "1d8+2", type: "melee", weight: 3, value: 5000, rarity: "rare", description: "Radiant blade dealing extra damage to undead. Finesse.", effect: "Radiant Dmg" },
+    "Dwarven Thrower": { name: "Dwarven Thrower", dmg: "1d8+3", type: "melee", weight: 2, value: 20000, rarity: "epic", description: "Returns to hand. Extra damage vs giants.", effect: "Return, +d8 vs Giants" },
 
     // Magic Armor - Uncommon to Rare
     "Armor +1": { name: "Armor +1", ac: 13, type: "light", weight: 10, value: 500, rarity: "uncommon", description: "Armor with +1 AC bonus.", effect: "+1 AC" },
@@ -59,6 +63,9 @@ export const ITEM_LIBRARY: Record<string, Item> = {
     "Adamantine Armor": { name: "Adamantine Armor", ac: 16, type: "heavy", weight: 55, value: 1500, rarity: "uncommon", description: "Crits become normal hits.", effect: "Immune to Crits" },
     "Dragon Scale Mail": { name: "Dragon Scale Mail", ac: 14, type: "medium", weight: 45, value: 4000, rarity: "epic", description: "Grants advantage on saves vs dragon breath.", effect: "+1 AC, Dragon Resist" },
     "Armor of Invulnerability": { name: "Armor of Invulnerability", ac: 18, type: "heavy", weight: 65, value: 50000, rarity: "legendary", description: "Immunity to nonmagical damage (limited).", effect: "Resist Nonmagical" },
+    "Arrow-Catching Shield": { name: "Arrow-Catching Shield", ac: 4, type: "shield", weight: 6, value: 4000, rarity: "rare", description: "Grants +2 AC vs ranged attacks.", effect: "+2 AC vs Ranged" },
+    "Glamoured Studded Leather": { name: "Glamoured Studded Leather", ac: 13, type: "light", weight: 13, value: 4000, rarity: "rare", description: "+1 AC. Can change appearance.", effect: "+1 AC, Disguise" },
+    "Elven Chain": { name: "Elven Chain", ac: 14, type: "medium", weight: 20, value: 4000, rarity: "rare", description: "+1 AC. Considered proficient even if not.", effect: "+1 AC, Auto-Proficiency" },
 
     // Wondrous Items - Common to Uncommon
     "Bag of Holding": { name: "Bag of Holding", type: "accessory", weight: 15, value: 500, rarity: "uncommon", description: "Holds 500 lbs in extradimensional space.", effect: "500 lb Capacity" },
@@ -70,6 +77,13 @@ export const ITEM_LIBRARY: Record<string, Item> = {
     "Gauntlets of Ogre Power": { name: "Gauntlets of Ogre Power", type: "accessory", weight: 2, value: 8000, rarity: "uncommon", description: "Str becomes 19.", effect: "Str 19" },
     "Belt of Giant Strength": { name: "Belt of Giant Strength", type: "accessory", weight: 1, value: 20000, rarity: "epic", description: "Str becomes 21-29 (varies).", effect: "Str 21+" },
     "Headband of Intellect": { name: "Headband of Intellect", type: "accessory", weight: 0.5, value: 8000, rarity: "uncommon", description: "Int becomes 19.", effect: "Int 19" },
+    "Cloak of Elvenkind": { name: "Cloak of Elvenkind", type: "accessory", weight: 1, value: 500, rarity: "uncommon", description: "Camouflage. Disadvantage on perception to see you.", effect: "Stealth Advantage" },
+    "Boots of Elvenkind": { name: "Boots of Elvenkind", type: "accessory", weight: 1, value: 500, rarity: "uncommon", description: "Steps make no sound.", effect: "Silent Movement" },
+    "Goggles of Night": { name: "Goggles of Night", type: "accessory", weight: 0.5, value: 500, rarity: "uncommon", description: "Grants 60ft Darkvision.", effect: "Darkvision" },
+    "Pearl of Power": { name: "Pearl of Power", type: "accessory", weight: 0.1, value: 1000, rarity: "uncommon", description: "Regain one spell slot up to 3rd level daily.", effect: "Regain Spell Slot" },
+    "Hat of Disguise": { name: "Hat of Disguise", type: "accessory", weight: 0.5, value: 800, rarity: "uncommon", description: "Cast Disguise Self at will.", effect: "Disguise Self" },
+    "Slippers of Spider Climbing": { name: "Slippers of Spider Climbing", type: "accessory", weight: 0.5, value: 1500, rarity: "uncommon", description: "Walk up walls and ceilings hands-free.", effect: "Spider Climb" },
+    "Stone of Good Luck": { name: "Stone of Good Luck", type: "accessory", weight: 0.1, value: 600, rarity: "uncommon", description: "+1 to ability checks and saving throws.", effect: "+1 Checks/Saves" },
 
     // Wondrous Items - Rare to Legendary
     "Cloak of Invisibility": { name: "Cloak of Invisibility", type: "accessory", weight: 1, value: 80000, rarity: "legendary", description: "Become invisible at will.", effect: "Invisibility at Will" },
@@ -81,5 +95,14 @@ export const ITEM_LIBRARY: Record<string, Item> = {
     "Portable Hole": { name: "Portable Hole", type: "accessory", weight: 0.5, value: 8000, rarity: "rare", description: "10ft deep extradimensional hole.", effect: "10ft Hole" },
     "Immovable Rod": { name: "Immovable Rod", type: "accessory", weight: 2, value: 5000, rarity: "uncommon", description: "Becomes fixed in place.", effect: "Fixed Position" },
     "Rope of Entanglement": { name: "Rope of Entanglement", type: "accessory", weight: 3, value: 4000, rarity: "rare", description: "Animates to restrain creatures.", effect: "Restrain Creature" },
-    "Eversmoking Bottle": { name: "Eversmoking Bottle", type: "accessory", weight: 1, value: 1000, rarity: "uncommon", description: "Creates heavy smoke cloud.", effect: "Smoke Cloud" }
+    "Eversmoking Bottle": { name: "Eversmoking Bottle", type: "accessory", weight: 1, value: 1000, rarity: "uncommon", description: "Creates heavy smoke cloud.", effect: "Smoke Cloud" },
+    "Carpet of Flying": { name: "Carpet of Flying", type: "accessory", weight: 10, value: 30000, rarity: "epic", description: "A magic carpet that flies (40ft).", effect: "Flight 40ft" },
+    "Ring of Invisibility": { name: "Ring of Invisibility", type: "accessory", weight: 0, value: 50000, rarity: "legendary", description: "Turn invisible at will.", effect: "Invisibility" },
+
+    // More Consumables
+    "Potion of Water Breathing": { name: "Potion of Water Breathing", type: "consumable", weight: 0.5, value: 100, rarity: "uncommon", description: "Breathe underwater for 1 hour.", effect: "Water Breathing" },
+    "Potion of Flying": { name: "Potion of Flying", type: "consumable", weight: 0.5, value: 500, rarity: "rare", description: "Gain flying speed for 1 hour.", effect: "Flight" },
+    "Potion of Giant Strength (Hill)": { name: "Potion of Giant Strength (Hill)", type: "consumable", weight: 0.5, value: 300, rarity: "uncommon", description: "Strength becomes 21 for 1 hour.", effect: "Str 21" },
+    "Dust of Disappearance": { name: "Dust of Disappearance", type: "consumable", weight: 0.1, value: 300, rarity: "uncommon", description: "Invisibility for 2d4 minutes.", effect: "Invisibility (Group)" },
+    "Oil of Sharpness": { name: "Oil of Sharpness", type: "consumable", weight: 0.1, value: 2000, rarity: "rare", description: "Coat weapon for +3 bonus for 1 hour.", effect: "+3 Weapon Oil" }
 };

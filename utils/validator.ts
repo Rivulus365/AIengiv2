@@ -3,46 +3,42 @@ import { z } from 'zod';
 import { GameState, Item } from '../types';
 import { ITEM_LIBRARY } from '../data/items';
 
-const PlayerSchema = z.object({
-    hp: z.object({
-        current: z.number().int(),
-        max: z.number().int().min(1)
-    }),
-}).passthrough();
+// --- Zod Schemas ---
 
-const LocationSchema = z.object({
-    name: z.string().min(1, "Location name cannot be empty")
-}).passthrough();
-
-const InnerGameStateSchema = z.object({
-    player: PlayerSchema,
-    worldState: LocationSchema.optional(),
-    lastRolls: z.array(z.object({
-        value: z.number(),
-        isCrit: z.boolean(),
-        isFail: z.boolean(),
-        source: z.enum(['player', 'enemy']).optional().default('player'),
-        label: z.string().optional()
-    })).optional()
-}).passthrough(); 
-
-export const GameStateSchema = z.object({
-    text: z.string().min(1, "Narrative text is missing"),
-    gameState: InnerGameStateSchema,
-    actions: z.array(z.string()).min(1, "At least one action is required")
+const HpSchema = z.object({
+    current: z.number(),
+    max: z.number()
 });
 
-export type ValidatedAIResponse = z.infer<typeof GameStateSchema>;
+const PlayerSchema = z.object({
+    hp: HpSchema,
+}).passthrough();
 
-export const validateGameResponse = (jsonString: string): ValidatedAIResponse => {
-    let rawObj;
-    try {
-        rawObj = JSON.parse(jsonString);
-    } catch (e) {
-        throw new Error("Invalid JSON Syntax");
-    }
-    return GameStateSchema.parse(rawObj);
+const WorldStateSchema = z.object({
+    location: z.string(),
+}).passthrough();
+
+const CombatSchema = z.object({
+    isActive: z.boolean(),
+}).passthrough();
+
+// Main GameState Schema - loosely valid to allow for AI flexibility, but enforces critical structure
+export const GameStateSchema = z.object({
+    player: PlayerSchema,
+    worldState: WorldStateSchema,
+    combat: CombatSchema,
+    // Optional arrays that default to empty if missing in Zod parsing logic below or handled by repair
+    inventory: z.array(z.any()).optional(),
+    equipment: z.any().optional(),
+    combatLog: z.array(z.any()).optional(),
+    lastRolls: z.array(z.any()).optional()
+}).passthrough();
+
+export const validateGameState = (data: any) => {
+    return GameStateSchema.safeParse(data);
 };
+
+// --- Heuristic Repair & Normalization ---
 
 export const normalizeGameState = (state: any): any => {
     if (!state || typeof state !== 'object') return state;
@@ -97,6 +93,6 @@ export const repairGameState = (brokenState: any, lastValidState: GameState): Ga
         combat: normalizedBroken?.combat || lastValidState.combat,
         combatLog: Array.isArray(normalizedBroken?.combatLog) ? normalizedBroken.combatLog : lastValidState.combatLog,
         worldState: normalizedBroken?.worldState || lastValidState.worldState,
-        lastRolls: normalizedBroken?.lastRolls // Update to plural
+        lastRolls: normalizedBroken?.lastRolls
     };
 };

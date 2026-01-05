@@ -200,13 +200,13 @@ const LandingPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-[100dvh] w-full bg-[#0c0a09] text-stone-300 font-serif relative overflow-hidden flex flex-col">
+    <div className="min-h-[100dvh] w-full bg-[#0c0a09] text-stone-300 font-serif relative overflow-y-auto custom-scrollbar flex flex-col">
       {/* Background Atmospherics */}
-      <NoiseTexture className="animate-mist text-stone-500" opacity={0.08} />
-      <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#0c0a09] to-transparent z-10"></div>
+      <NoiseTexture className="fixed inset-0 animate-mist text-stone-500 z-0" opacity={0.08} />
+      <div className="fixed top-0 left-0 w-full h-32 bg-gradient-to-b from-[#0c0a09] to-transparent z-10 pointer-events-none"></div>
       
       {/* Navigation */}
-      <nav className="relative z-20 px-6 py-6 flex justify-between items-center max-w-7xl mx-auto w-full">
+      <nav className="relative z-20 px-6 py-6 flex justify-between items-center max-w-7xl mx-auto w-full shrink-0">
         <Logo className="h-12 w-auto" variant="nav" />
         <Button 
             variant="ghost"
@@ -341,7 +341,7 @@ const LandingPage: React.FC = () => {
         </div>
       </main>
 
-      <footer className="relative z-20 border-t border-[#292524] p-6 text-center">
+      <footer className="relative z-20 border-t border-[#292524] p-6 text-center shrink-0">
         <p className="text-[10px] text-stone-600 uppercase tracking-widest">
             © 2024 Infinite Adventure Engine • Powered by Gemini
         </p>

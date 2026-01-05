@@ -39,23 +39,31 @@ h1, h2, h3, h4, h5, h6, .font-display {
     font-family: 'Inter', sans-serif;
 }
 
-/* Custom Scrollbar - Minimalist */
+/* Custom Scrollbar - Enhanced for visibility and theme */
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(217, 119, 6, 0.3) transparent;
+}
+
+/* Webkit Scrollbars (Chrome, Safari, Edge) */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
     border-radius: 10px;
 }
 
+::-webkit-scrollbar-thumb {
+    background: rgba(217, 119, 6, 0.2); /* Amber 600 with opacity */
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(217, 119, 6, 0.5); /* Brighter on hover */
 }
 
 /* Utility Classes for Glassmorphism */
@@ -102,12 +110,18 @@ h1, h2, h3, h4, h5, h6, .font-display {
     100% { transform: scale(1); opacity: 1; }
 }
 
+@keyframes scanline {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100%); }
+}
+
 .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
 .animate-slide-up { animation: slideUpFade 0.4s ease-out forwards; }
 .animate-scale-in { animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 .animate-pulse-glow { animation: pulse-glow 3s infinite; }
 .animate-dice-tumble { animation: dice-tumble 0.3s infinite linear; }
 .animate-dice-pop { animation: dice-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+.animate-scanline { animation: scanline 4s linear infinite; }
 
 /* Text Gradients */
 .text-gradient-amber {

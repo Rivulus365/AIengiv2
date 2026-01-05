@@ -1,5 +1,5 @@
 
-import { BaseStats, DerivedStats, ClassDefinition, Skill } from '../types';
+import { BaseStats, DerivedStats, Equipment } from '../types';
 import { CLASS_DEFINITIONS, SKILL_LIST } from '../constants';
 
 // --- Point Buy Logic ---
@@ -30,10 +30,16 @@ export const calculateMaxHp = (charClass: string, conScore: number, level: numbe
   return Math.max(1, (hitDie + conMod) + (hpPerLevel * (level - 1)));
 };
 
+export const calculateCarryCapacity = (strScore: number): number => {
+    return strScore * 15;
+};
+
 export const calculateDerivedStats = (
     stats: BaseStats, 
     charClass: string, 
-    level: number
+    level: number,
+    proficiencies: string[],
+    equipment?: Equipment
 ): DerivedStats => {
     const strMod = getModifier(stats.str);
     const dexMod = getModifier(stats.dex);
@@ -44,7 +50,41 @@ export const calculateDerivedStats = (
     // Proficiency Bonus: +2 at lvl 1, +3 at lvl 5, +4 at lvl 9...
     const proficiencyBonus = Math.ceil(level / 4) + 1;
 
-    const ac = 10 + dexMod; // Base Unarmored AC
+    // AC Calculation
+    let ac = 10 + dexMod; 
+    
+    if (equipment?.body) {
+        const armor = equipment.body;
+        const baseAc = armor.ac || 10;
+        // Armor Types
+        if (armor.type === 'light') {
+            ac = baseAc + dexMod;
+        } else if (armor.type === 'medium') {
+            ac = baseAc + Math.min(dexMod, 2);
+        } else if (armor.type === 'heavy') {
+            ac = baseAc;
+        }
+    } else {
+        // Unarmored Defense Check
+        if (charClass === 'Barbarian') {
+             // 10 + Dex + Con
+             ac = Math.max(ac, 10 + dexMod + getModifier(stats.con));
+        } else if (charClass === 'Monk' && !equipment?.offHand) { 
+             // 10 + Dex + Wis (Assuming no shield for Monk)
+             ac = Math.max(ac, 10 + dexMod + wisMod);
+        }
+    }
+
+    // Shield Bonus
+    if (equipment?.offHand?.type === 'shield') {
+        ac += (equipment.offHand.ac || 2);
+    }
+    
+    // Accessory Bonus
+    if (equipment?.accessory?.ac) {
+        ac += equipment.accessory.ac;
+    }
+
     const initiative = dexMod;
     
     let spellMod = 0;
@@ -54,17 +94,22 @@ export const calculateDerivedStats = (
     
     const spellSaveDc = 8 + proficiencyBonus + spellMod;
 
+    // Passive Perception
+    const hasPerceptionProf = proficiencies.includes("Perception");
+    const passivePerception = 10 + wisMod + (hasPerceptionProf ? proficiencyBonus : 0);
+
     return {
         ac,
         attackBonus: strMod + proficiencyBonus,
         damageDie: '1d8',
         proficiencyBonus,
         initiative,
-        spellSaveDc
+        spellSaveDc,
+        passivePerception
     };
 };
 
-export const generateInitialSkills = (stats: BaseStats, proficiencies: string[], proficiencyBonus: number): Skill[] => {
+export const generateInitialSkills = (stats: BaseStats, proficiencies: string[], proficiencyBonus: number): any[] => {
     const strMod = getModifier(stats.str);
     const dexMod = getModifier(stats.dex);
     const intMod = getModifier(stats.int);

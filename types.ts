@@ -15,6 +15,7 @@ export interface DerivedStats {
   proficiencyBonus: number;
   initiative: number;
   spellSaveDc: number;
+  passivePerception: number;
 }
 
 export interface ClassResources {
@@ -22,15 +23,63 @@ export interface ClassResources {
   classFeats: { name: string; current: number; max: number };
 }
 
+// Subclass definition used in ClassDefinition
+export interface SubclassDefinition {
+  name: string;
+  description: string;
+  features: string[];
+  statBonuses: Partial<BaseStats>;
+}
+
+// Definition for character classes
+export interface ClassDefinition {
+  name: string;
+  description: string;
+  statBonuses: Partial<BaseStats>;
+  resources: ClassResources;
+  features: string[];
+  hitDie: number;
+  subclasses?: Record<string, SubclassDefinition>;
+}
+
+// Definition for character backgrounds
+export interface BackgroundDefinition {
+  name: string;
+  description: string;
+  skillProficiencies: string[];
+  feature: {
+    name: string;
+    description: string;
+  };
+}
+
+// Definition for character races
+export interface RaceDefinition {
+  name: string;
+  description: string;
+  statBonuses: Partial<BaseStats>;
+  traits: string[];
+  speed: number;
+}
+
+// Definition for skills
+export interface SkillDefinition {
+  name: string;
+  ability: keyof BaseStats;
+  description: string;
+}
+
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
 export interface Item {
+  // Made optional to accommodate library items that may not have explicit IDs
+  id?: string;
   name: string;
   description?: string;
   effect?: string;
   dmg?: string;
   ac?: number;
-  prop?: string; // e.g. "versatile"
+  prop?: string;
   type?: string;
   value?: number;
   weight?: number;
@@ -45,18 +94,21 @@ export interface Equipment {
   accessory?: Item;
 }
 
+export type AIBehavior = 'Mindless' | 'Cowardly' | 'Tactical' | 'Aggressive';
+
 export interface Enemy {
   name: string;
   hp: number;
   maxHp?: number;
   ac: number;
-  state?: string; // "Normal", "Prone", "Bloodied"
+  state?: string;
   description?: string;
   traits?: string[];
   archetype?: string;
   cr?: number;
   xp?: number;
   attacks?: { name: string; bonus: number; dmg: string }[];
+  ai?: AIBehavior;
 }
 
 export interface CombatLogEntry {
@@ -73,12 +125,15 @@ export interface CombatState {
   isActive: boolean;
   distance: 'Melee' | 'Near' | 'Far';
   enemies: Enemy[];
+  playerInitiative?: number;
+  enemiesInitiative?: number;
 }
 
 export interface WorldState {
   location: string;
   time: string;
   activeQuest: string;
+  questsCompleted: string[];
 }
 
 export interface Feat {
@@ -109,6 +164,7 @@ export interface PlayerState {
   race: string;
   class: string;
   subclass?: string;
+  background?: string; // Added background field
   level: number;
   xp: number;
   nextLevelXp: number;
@@ -137,10 +193,11 @@ export interface RollData {
   isCrit: boolean;
   isFail: boolean;
   source: 'player' | 'enemy';
-  label?: string; // e.g. "Attack", "Damage"
+  label?: string;
 }
 
 export interface GameState {
+  summary?: string;
   player: PlayerState;
   equipment: Equipment;
   inventory: Item[];
@@ -175,50 +232,6 @@ export interface ToastMessage {
   title: string;
   message?: string;
   type: 'success' | 'error' | 'info' | 'warning';
-}
-
-export interface SubclassDefinition {
-  name: string;
-  description: string;
-  features: string[];
-  statBonuses?: Partial<BaseStats>;
-}
-
-export interface ClassDefinition {
-  name: string;
-  description: string;
-  statBonuses: Partial<BaseStats>;
-  resources: {
-    spellSlots: { current: number; max: number };
-    classFeats: { name: string; current: number; max: number };
-  };
-  features: string[];
-  hitDie: number;
-  subclasses?: Record<string, SubclassDefinition>;
-}
-
-export interface RaceDefinition {
-  name: string;
-  description: string;
-  statBonuses: Partial<BaseStats>;
-  traits: string[];
-  speed: number;
-}
-
-export interface BackgroundDefinition {
-  name: string;
-  description: string;
-  skillProficiencies: string[];
-  feature: {
-    name: string;
-    description: string;
-  };
-}
-
-export interface SkillDefinition {
-  name: string;
-  ability: keyof BaseStats;
-  description: string;
 }
 
 export interface CharacterCreationData {

@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { Save, Trash2, X, AlertTriangle, Volume2, VolumeX, Image as ImageIcon, ImageOff, Gauge, Zap, Type, Mic, Shield } from 'lucide-react';
 import { ImageSize, FontSize } from '../types';
 import { useGameStore } from '../store/gameStore';
+import { useSettingsStore } from '../store/settingsStore';
+import { useUIStore } from '../store/uiStore';
 import { audioService } from '../services/audio';
 import Button from './design-system/Button';
 import ConsentManager from './ConsentManager';
@@ -14,21 +16,16 @@ interface SettingsModalProps {
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
   // Store Selectors
-  const soundEnabled = useGameStore(state => state.soundEnabled);
-  const setSoundEnabled = useGameStore(state => state.setSoundEnabled);
-  const narratorEnabled = useGameStore(state => state.narratorEnabled);
-  const setNarratorEnabled = useGameStore(state => state.setNarratorEnabled);
-  const imageGenEnabled = useGameStore(state => state.imageGenEnabled);
-  const setImageGenEnabled = useGameStore(state => state.setImageGenEnabled);
-  const imageQuality = useGameStore(state => state.imageSize);
-  const setImageQuality = useGameStore(state => state.setImageSize);
-  const textSpeed = useGameStore(state => state.textSpeed);
-  const setTextSpeed = useGameStore(state => state.setTextSpeed);
-  const fontSize = useGameStore(state => state.fontSize);
-  const setFontSize = useGameStore(state => state.setFontSize);
-  const manualSave = useGameStore(state => state.manualSave);
-  const resetCampaign = useGameStore(state => state.resetCampaign);
+  const { 
+    soundEnabled, setSoundEnabled, 
+    narratorEnabled, setNarratorEnabled, 
+    imageGenEnabled, setImageGenEnabled,
+    imageSize: imageQuality, setImageSize: setImageQuality,
+    textSpeed, setTextSpeed,
+    fontSize, setFontSize
+  } = useSettingsStore();
 
+  const { manualSave, resetCampaign } = useGameStore();
   const [showConsent, setShowConsent] = useState(false);
   
   // Confirmation State
@@ -46,7 +43,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
       const newState = !narratorEnabled;
       setNarratorEnabled(newState);
       if (newState) {
-          // Prime audio context if enabling narrator
           audioService.resume();
       }
   };
@@ -95,11 +91,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
 
   return (
     <>
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200">
+    <div 
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+    >
       <div className="bg-[#1c1917] border border-[#44403c] p-6 rounded-xl shadow-2xl max-w-sm w-full relative animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
         <button 
             onClick={onClose}
             className="absolute top-3 right-3 text-stone-500 hover:text-stone-300 transition-colors z-10"
+            aria-label="Close Settings"
         >
             <X className="w-5 h-5" />
         </button>
@@ -134,17 +136,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
             </div>
         ) : (
             <>
-                <h2 className="text-xl font-display text-amber-500 border-b border-[#292524] pb-3 mb-4 text-center tracking-wide">
+                <h2 id="settings-title" className="text-xl font-display text-amber-500 border-b border-[#292524] pb-3 mb-4 text-center tracking-wide">
                     System Menu
                 </h2>
 
                 <div className="space-y-6 overflow-y-auto custom-scrollbar pr-2 flex-1">
-                    
-                    {/* Preferences Section */}
                     <div className="space-y-3">
                         <div className="text-[10px] uppercase tracking-widest text-stone-600 font-bold mb-2">Audio & Visuals</div>
-                        
-                        {/* Audio Toggle */}
                         <button 
                             onClick={() => { audioService.playUiSound('click'); setSoundEnabled(!soundEnabled); }}
                             className="w-full flex items-center justify-between p-3 bg-[#0c0a09] border border-[#292524] rounded-lg text-stone-300 hover:border-amber-900/30 transition-all"
@@ -154,11 +152,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                                 <span className="text-sm font-bold">Audio Effects</span>
                             </div>
                             <div className={`w-8 h-4 rounded-full relative transition-colors ${soundEnabled ? 'bg-emerald-900/50' : 'bg-stone-800'}`}>
-                                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${soundEnabled ? 'left-4.5 bg-emerald-400' : 'left-0.5 bg-stone-500'}`} style={{ left: soundEnabled ? '1.125rem' : '0.125rem' }}></div>
+                                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${soundEnabled ? 'translate-x-4 bg-emerald-400' : 'translate-x-0 bg-stone-500'}`}></div>
                             </div>
                         </button>
 
-                        {/* Narrator Toggle */}
                         <button 
                             onClick={() => { audioService.playUiSound('click'); handleNarratorToggle(); }}
                             className="w-full flex items-center justify-between p-3 bg-[#0c0a09] border border-[#292524] rounded-lg text-stone-300 hover:border-amber-900/30 transition-all"
@@ -171,11 +168,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                                 </div>
                             </div>
                             <div className={`w-8 h-4 rounded-full relative transition-colors ${narratorEnabled ? 'bg-amber-900/50' : 'bg-stone-800'}`}>
-                                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${narratorEnabled ? 'left-4.5 bg-amber-400' : 'left-0.5 bg-stone-500'}`} style={{ left: narratorEnabled ? '1.125rem' : '0.125rem' }}></div>
+                                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${narratorEnabled ? 'translate-x-4 bg-amber-400' : 'translate-x-0 bg-stone-500'}`}></div>
                             </div>
                         </button>
 
-                        {/* Image Gen Toggle */}
                         <button 
                             onClick={() => { audioService.playUiSound('click'); setImageGenEnabled(!imageGenEnabled); }}
                             className="w-full flex items-center justify-between p-3 bg-[#0c0a09] border border-[#292524] rounded-lg text-stone-300 hover:border-amber-900/30 transition-all"
@@ -185,11 +181,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                                 <span className="text-sm font-bold">Scene Generation</span>
                             </div>
                             <div className={`w-8 h-4 rounded-full relative transition-colors ${imageGenEnabled ? 'bg-blue-900/50' : 'bg-stone-800'}`}>
-                                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${imageGenEnabled ? 'left-4.5 bg-blue-400' : 'left-0.5 bg-stone-500'}`} style={{ left: imageGenEnabled ? '1.125rem' : '0.125rem' }}></div>
+                                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${imageGenEnabled ? 'translate-x-4 bg-blue-400' : 'translate-x-0 bg-stone-500'}`}></div>
                             </div>
                         </button>
 
-                        {/* Image Quality Select */}
                         {imageGenEnabled && (
                             <div className="p-3 bg-[#0c0a09] border border-[#292524] rounded-lg text-stone-300">
                                 <div className="flex items-center gap-2 mb-2 text-xs text-stone-500 uppercase tracking-widest font-bold">
@@ -209,7 +204,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                             </div>
                         )}
 
-                        {/* Text Speed Select */}
                         <div className="p-3 bg-[#0c0a09] border border-[#292524] rounded-lg text-stone-300">
                             <div className="flex items-center gap-2 mb-2 text-xs text-stone-500 uppercase tracking-widest font-bold">
                                 <Zap className="w-3 h-3" /> Text Speed
@@ -227,7 +221,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                             </div>
                         </div>
 
-                        {/* Font Size Select */}
                         <div className="p-3 bg-[#0c0a09] border border-[#292524] rounded-lg text-stone-300">
                             <div className="flex items-center gap-2 mb-2 text-xs text-stone-500 uppercase tracking-widest font-bold">
                                 <Type className="w-3 h-3" /> Text Size
@@ -244,13 +237,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                                 ))}
                             </div>
                         </div>
-
                     </div>
 
-                    {/* Game Data Section */}
                     <div className="space-y-4">
                         <div className="text-[10px] uppercase tracking-widest text-stone-600 font-bold mb-1">Data & Privacy</div>
-                        
                         <Button
                             variant="secondary"
                             className="w-full justify-between"
@@ -259,7 +249,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                         >
                             Save Game
                         </Button>
-
                         <Button
                             variant="ghost"
                             className="w-full justify-start text-xs border border-transparent hover:border-[#292524]"
@@ -268,8 +257,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
                         >
                             Privacy Preferences
                         </Button>
-
-                        {/* Danger Zone */}
                         <div className="p-4 rounded-xl border border-red-900/30 bg-red-950/10 space-y-3">
                             <div className="text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center gap-2">
                                 <AlertTriangle className="w-3 h-3" /> Danger Zone
@@ -293,7 +280,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isOpen }) => {
         )}
       </div>
     </div>
-    
     <ConsentManager forceOpen={showConsent} onClose={() => setShowConsent(false)} />
     </>
   );

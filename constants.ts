@@ -34,6 +34,7 @@ export const INITIAL_GAME_STATE: GameState = {
     race: 'Human',
     class: '',
     subclass: '',
+    background: 'Unknown',
     level: 1,
     xp: 0,
     nextLevelXp: 300,
@@ -48,7 +49,8 @@ export const INITIAL_GAME_STATE: GameState = {
       damageDie: '1d4',
       proficiencyBonus: 2,
       initiative: 0,
-      spellSaveDc: 10
+      spellSaveDc: 10,
+      passivePerception: 10
     },
     resources: {
       spellSlots: { current: 0, max: 0 },
@@ -65,12 +67,13 @@ export const INITIAL_GAME_STATE: GameState = {
     // Empty object implies all slots are undefined (unequipped)
   },
   inventory: [
-    { name: 'Rations', qty: 3, description: 'Dried meats.', weight: 3, value: 1.5, rarity: 'common' }
+    { id: 'rations', name: 'Rations', qty: 3, description: 'Dried meats.', weight: 3, value: 1.5, rarity: 'common' }
   ],
   worldState: {
     location: 'Somewhere in the Cosmos',
     time: 'Day',
-    activeQuest: 'None'
+    activeQuest: 'None',
+    questsCompleted: []
   },
   combat: {
     isActive: false,
@@ -90,7 +93,13 @@ CORE DIRECTIVE: You are a strict, state-tracking RPG engine based on Dungeons & 
 Ability Modifier: $\\lfloor(\\text{Score} - 10) / 2\\rfloor$.Proficiency Bonus (PB): Determined by Level (Level 1-4 = +2, etc.).Skill Check: $1d20 + \\text{Ability Mod} + (\\text{PB if Proficient})$.Saving Throw DC: $8 + \\text{Ability Mod} + \\text{PB}$.Passive Perception: $10 + \\text{Wis Mod} + (\\text{PB if Proficient})$.Combat Math:Initiative: $1d20 + \\text{Dex Mod}$.Armor Class (AC):Unarmored: $10 + \\text{Dex Mod}$.Light Armor: $\\text{Base} + \\text{Dex Mod}$.Medium Armor: $\\text{Base} + \\text{Dex Mod (Max 2)}$.Heavy Armor: Base only (No Dex Mod).Attack Rolls:Melee: $1d20 + \\text{Str Mod} + \\text{PB}$(unless Finesse, then choice of Str/Dex).Ranged: $1d20 + \\text{Dex Mod} + \\text{PB}$.Spell Attack: $1d20 + \\text{Spellcasting Mod} + \\text{PB}$.Critical Hits: On a Natural 20, roll damage dice twice. Add modifiers only once.
 2. THE LOGIC LOOPS:
 The Action Economy: Every turn allows for 1 Move, 1 Action, 1 Bonus Action, and 1 Reaction. You must track which have been used.The Combat Loop (When inCombat: true):Resolution: Calculate hits against target AC.Simultaneous Rolling: To streamline play, roll Attack (d20) and Damage dice simultaneously in the backend. Only apply damage if the Attack >= AC.Advantage/Disadvantage: If a condition applies (eg, Prone, Blinded), roll 2d20 and drop the lowest (Advantage) or highest (Disadvantage).
-3. State ManagementAt the end of EVERY response, you must print the current state in this exact JSON format.
+3. ENEMY AI PROFILES:
+Enemies act according to their 'ai' field (default: "Tactical"):
+- "Mindless" (e.g., Zombies, Oozes): Never flees. Attacks the nearest target regardless of danger.
+- "Cowardly" (e.g., Goblins, Kobolds): If HP < 50%, MUST attempt to FLEE (Disengage + Move).
+- "Tactical" (e.g., Bandits, Hobgoblins): If HP < 25%, attempts to FLEE. Uses Cover or Dodge if ranged attacks are incoming. Will flank if possible.
+- "Aggressive" (e.g., Orcs, Beasts): Fights to the death. Prioritizes low HP targets or targets dealing the most damage.
+4. State ManagementAt the end of EVERY response, you must print the current state in this exact JSON format.
 JSON{
   "player": {
     "hp_current": 0,

@@ -6,6 +6,7 @@ import { GameState, ImageSize } from '../types';
 // Optimized for speed and capability
 const GM_TEXT_MODEL = 'gemini-3-pro-preview';
 const GM_SUMMARY_MODEL = 'gemini-3-flash-preview';
+const GM_REPAIR_MODEL = 'gemini-3-flash-preview';
 
 interface GeminiConfig {
     temperature?: number;
@@ -116,18 +117,24 @@ export const generateSceneImage = async (
 };
 
 export const summarizeHistory = async (
-  history: { role: string; parts: { text: string }[] }[]
+  history: { role: string; parts: { text: string }[] }[],
+  currentSummary?: string
 ): Promise<string> => {
   try {
     // Initialize right before call to ensure up-to-date API key from selection dialog
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const historyText = history.map(h => `${h.role}: ${h.parts[0].text}`).join('\n');
+    const previousSummaryContext = currentSummary ? `PREVIOUS SUMMARY:\n${currentSummary}\n\n` : '';
+    
     const prompt = `
     Summarize the following RPG session history into a concise paragraph that captures the key narrative beats, important decisions, and current situation. 
+    Incorporate the PREVIOUS SUMMARY if provided to create a cohesive narrative history.
     Keep it under 200 words.
     
-    HISTORY:
+    ${previousSummaryContext}
+
+    RECENT HISTORY:
     ${historyText}
     `;
 
@@ -165,5 +172,39 @@ export const generateNarration = async (text: string): Promise<string | undefine
     } catch (error) {
         console.error("TTS Generation Error:", error);
         return undefined;
+    }
+};
+
+export const repairMalformedJson = async (brokenJson: string, errorContext: string): Promise<any> => {
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const prompt = `
+        SYSTEM: You are a JSON repair specialist.
+        The following JSON object represents a game state but is malformed or invalid according to strict schema rules.
+        
+        ERROR CONTEXT:
+        ${errorContext}
+        
+        BROKEN JSON:
+        ${brokenJson}
+        
+        TASK: Fix the JSON syntax and structure so it is valid. Do NOT change the data values if possible, only the structure/syntax. 
+        Return ONLY the raw JSON string. Do not include markdown code blocks.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: GM_REPAIR_MODEL,
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json"
+            }
+        });
+
+        const text = response.text;
+        if (!text) return null;
+        return JSON.parse(text);
+    } catch (e) {
+        console.error("Repair failed:", e);
+        return null;
     }
 };

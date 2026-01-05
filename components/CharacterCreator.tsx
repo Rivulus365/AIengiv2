@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { CLASS_DEFINITIONS, RACE_DEFINITIONS, FEAT_OPTIONS, BACKGROUND_DEFINITIONS } from '../constants';
@@ -125,24 +124,26 @@ const CharacterCreator: React.FC = () => {
                                 <h3 className="text-3xl font-display text-stone-100">Who are you?</h3>
                                 <div className="space-y-6 max-w-lg">
                                     <div>
-                                        <label className="text-xs uppercase font-bold text-stone-500 tracking-widest mb-2 block">Character Name</label>
+                                        <label htmlFor="charName" className="text-xs uppercase font-bold text-stone-500 tracking-widest mb-2 block">Character Name</label>
                                         <div className="flex gap-2">
                                             <input 
+                                                id="charName"
                                                 type="text" 
                                                 value={name}
                                                 onChange={(e) => setName(e.target.value)}
                                                 className="flex-1 bg-black/40 border border-stone-800 rounded-lg p-4 text-lg text-stone-200 focus:border-amber-600 focus:outline-none transition-colors placeholder-stone-700"
                                                 placeholder="Enter a name..."
                                             />
-                                            <button onClick={handleGenerateName} className="p-4 bg-stone-900 border border-stone-800 rounded-lg hover:text-amber-500 transition-colors" title="Randomize">
+                                            <button onClick={handleGenerateName} className="p-4 bg-stone-900 border border-stone-800 rounded-lg hover:text-amber-500 transition-colors" title="Randomize" aria-label="Generate Random Name">
                                                 <Dices className="w-6 h-6" />
                                             </button>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="text-xs uppercase font-bold text-stone-500 tracking-widest mb-2 block">Gender</label>
+                                            <label htmlFor="charGender" className="text-xs uppercase font-bold text-stone-500 tracking-widest mb-2 block">Gender</label>
                                             <select 
+                                                id="charGender"
                                                 value={gender}
                                                 onChange={(e) => setGender(e.target.value)}
                                                 className="w-full bg-black/40 border border-stone-800 rounded-lg p-4 text-stone-300 focus:border-amber-600 focus:outline-none appearance-none cursor-pointer"
@@ -154,8 +155,9 @@ const CharacterCreator: React.FC = () => {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="text-xs uppercase font-bold text-stone-500 tracking-widest mb-2 block">Age</label>
+                                            <label htmlFor="charAge" className="text-xs uppercase font-bold text-stone-500 tracking-widest mb-2 block">Age</label>
                                             <input 
+                                                id="charAge"
                                                 type="number" 
                                                 value={age}
                                                 onChange={(e) => setAge(Number(e.target.value))}
@@ -354,6 +356,7 @@ const CharacterCreator: React.FC = () => {
                                                         onClick={() => handleStatChange(stat, false)}
                                                         className="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 text-stone-400 flex items-center justify-center transition-colors disabled:opacity-30"
                                                         disabled={current <= 8}
+                                                        aria-label={`Decrease ${stat}`}
                                                     >
                                                         -
                                                     </button>
@@ -362,6 +365,7 @@ const CharacterCreator: React.FC = () => {
                                                         onClick={() => handleStatChange(stat, true)}
                                                         className="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 text-stone-400 flex items-center justify-center transition-colors disabled:opacity-30"
                                                         disabled={current >= 15 || pointsRemaining < costNext}
+                                                        aria-label={`Increase ${stat}`}
                                                     >
                                                         +
                                                     </button>
